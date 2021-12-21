@@ -61,7 +61,9 @@ func readTransactions(name string) [][]string {
 	return transactions
 }
 
-// Works through every line of the
+// Works through every line of the input transactions file and converts each to the expected format or discards it.
+// Every line of the input file is parsed even though not all of them produce a corresponding line in the output file.
+// At the end the order of the transactions is reversed (as crypto.com list them in reverse time order).
 func convertTransactions(transactions [][]string) [][]string {
 	// The first element must match this exactly otherwise the format may have changed:
 	// expectedFirstRow := []string{"Transaction", "Type", "Currency", "Amount", "USD Equivalent", "Details", "Outstanding Loan", "Date / Time"}

@@ -1,5 +1,16 @@
 package main
 
+// This program takes a CSV from nexo.io and adjusts it into a format suitable for my records.
+// Where applicable it rearranges each row into a format that matches my exchange-independent records.
+
+// TODO
+// The input and output filepaths are currently fixed. This should be changed
+// The usage should be explained here
+// Row processing should be enhanced to check all rows, even those that produce no output.
+
+// Notes:
+// Timestamps are in CET. These are NOT YET converted to UK local time.
+
 import (
 	"encoding/csv"
 	"flag"
@@ -10,9 +21,6 @@ import (
 
 func main() {
 
-	// verbose := flag.Bool("verbose", false, "Enable verbose reporting")
-	// inputTransactionsFilename := flag.String("transactions", "", "filepath of the input CSV file that contains transactions to convert")
-	// outputFilename := flag.String("output", "", "filepath of the output CSV file that contains the converted transactions")
 	flag.Parse()
 
 	inputs := flag.Args()
