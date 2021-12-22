@@ -11,10 +11,17 @@ package main
 // Notes:
 // Timestamps are in CET. These are NOT YET converted to UK local time.
 
+// TODO
+// Handle deposit: turn into TRANSFER-IN
+// Handle GBP -> XXX: this is a BUY of XXX
+// Handle Crypto Earn: this is STAKING
+// Handle  Card Cashback Reversal (look for identical transaction later???)
+// Handle Withdraw: this is TRANSFER-OUT
+// Add option to spread out transactions by currency, so group together all CRO and all AVAX etc.
+
 import (
 	"encoding/csv"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 )
@@ -30,14 +37,12 @@ func main() {
 
 	transactionsFilename := flag.Arg(0)
 	outputFile := flag.Arg(1)
-	fmt.Printf("input transactions:     %s\n", transactionsFilename)
-	fmt.Printf("output transactions:    %s\n", outputFile)
 
-	transactions := readTransactions("/home/antonioc/Downloads/nexo-test.csv")
+	transactions := readTransactions(transactionsFilename)
 
 	convertedTransactions := convertTransactions(transactions)
 
-	writeConvertedTransactions("/home/antonioc/Downloads/converted_nexo_transactions.csv", convertedTransactions)
+	writeConvertedTransactions(outputFile, convertedTransactions)
 }
 
 func readTransactions(name string) [][]string {
