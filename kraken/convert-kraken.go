@@ -259,10 +259,10 @@ func convertTransactions(transactions [][]string) [][]string {
 				fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
 			}
 			if valid {
-				data := []string{"", "Kraken", entry.time, ukTime, entry.balance, "", "", "", "", "", "", "", "", "STAKING"}
+				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
 			} else {
-				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.balance, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
+				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
 			}
 		} else {
