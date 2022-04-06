@@ -11,6 +11,44 @@ package main
 // Notes:
 // Timestamps are in CET. These are NOT YET converted to UK local time.
 
+// Spreadsheet format:
+//
+// Transaction: a transaction identifier
+// Type: the type of transaction (see below)
+// Currency: e.g. NEXONEXO, GBP but also e.g. GBPX/UST for a currency purchase
+// Amount:
+// USD Equivalent: USD ($) amount (presumably at the time)
+// Details: always starts with "approved/"
+// Outstanding Loan: always "$0.00"
+// Date / Time: YYYY-MM-DD HH:MM:SS
+//
+// Transaction Type:
+//     Interest: Represents a staking reward
+//       Currency: always NEXONEXO
+//     Exchange: Essentially a purchase (or a sale) of a token or coin
+//       Currency: "GBPX/target-currency"
+//       Amount: "currency amount"
+//       Details: "approved / Exchange GBPX to Bitcoin"
+//     DepositToExchange: Fiat currency sent to nexo.io:
+//       Currency: GBP
+//       Details: "approved / GBP Top Up"
+//     ExchangeDepositedOn:
+//       Currency: GBP
+//       Details: "approved / GBP to GBPX"
+//     LockingTermDeposit: Represents a currency being moved into a Term Wallet to earn staking rewards
+//       Currency: NEXONEXO, GBPX
+//       Details: "approved / Transfer from Savings Wallet to Term Wallet"
+//     ExchangeToWithdraw: represents GBPX conversion to GBP prior to withdrawl
+//       Currency: GBPX
+//       Details: "approved / GBPX to GBP"
+//     WithdrawExchanged: Withdrawl of GBP to a bank account
+//       Currency: GBP
+//       Details: "approved / GBP Withdrawal"
+//     Exchange Cashback: an airdrop
+//       Currency: BTC
+//       Details: "approved / 0.5% on top of your Exchange transaction"
+//     Deposit: a reward from nexo.io
+
 // TODO
 // Handle deposit: turn into TRANSFER-IN
 // Handle GBP -> XXX: this is a BUY of XXX
