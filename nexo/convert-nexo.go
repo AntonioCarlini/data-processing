@@ -179,6 +179,43 @@ func convertTransactions(transactions [][]string) [][]string {
 
 		// Handle each transaction Type separately
 		switch row[1] { // row[1] is the "Type"
+		case "LockingTermDeposit":
+			// LockingTermDeposit represents moving a token from the normal wallet into a wallet where it earns higher STAKING rewards in return for being locked.
+			// This line generates no output and is checked purely to ensure that the format is understood and has not changed.
+			// Input/Output Currency must be identical
+			if row[2] != row[4] {
+				fmt.Printf("TX %s: LockingTermDeposit currency error: input: %s, output: %s\n", row[0], row[2], row[2])
+			}
+			// Input Amount and Output Amount must be identical in absolute value the former is negative and the latter is positive.
+			if row[3][0] != '-' || row[3][1:] != row[5] {
+				fmt.Printf("TX %s: LockingTermDeposit currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+			}
+			//       Details: "approved / Transfer from Savings Wallet to Term Wallet"
+			if !strings.HasPrefix(row[7], "approved / Transfer from Savings Wallet to Term Wallet") {
+				fmt.Printf("TX %s: LockingTermDeposit Details error: input: %s\n", row[0], row[7])
+			}
+			if row[6][0] != '$' {
+				fmt.Printf("TX %s: LockingTermDeposit not in dollars [%s]\n", row[0], row[6])
+			}
+		case "UnlockingTermDeposit":
+			// UnlockingTermDeposit represents moving a token from the long term wallet into a normal wallet at the end of a term period.
+			// This line generates no output and is checked purely to ensure that the format is understood and has not changed.
+			// Input/Output Currency must be identical
+			if row[2] != row[4] {
+				fmt.Printf("TX %s: UnlockingTermDeposit currency error: input: %s, output: %s\n", row[0], row[2], row[2])
+			}
+			// Input Amount and Output Amount must be identical.
+			if row[3] != row[5] {
+				fmt.Printf("TX %s: UnlockingTermDeposit currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+			}
+			//       Details: "approved / Transfer from Term Wallet to Savings Wallet"
+			if !strings.HasPrefix(row[7], "approved / Transfer from Term Wallet to Savings Wallet") {
+				fmt.Printf("TX %s: UnlockingTermDeposit Details error: input: %s\n", row[0], row[7])
+			}
+			if row[6][0] != '$' {
+				fmt.Printf("TX %s: UnlockingTermDeposit not in dollars [%s]\n", row[0], row[6])
+			}
+
 		case "FixedTermInterest":
 			// "FixedTermInterest" is a staking reward that happens in a "Long Term Wallet".
 			// This is handled almost identically to "Interest".
@@ -290,16 +327,14 @@ func convertTransactions(transactions [][]string) [][]string {
 			// [6] is USD earned (but the "$" needs to be stripped)
 			// [9] is date/time in CET
 			// Output should be "nexo.io", date/time, uk date/time, nexo, (price), total, exch, £, "", "", "", "", "STAKING"
-			entry := []string{"", "nexo.io", row[9], "", row[3], "", row[6][1:], "", "", "", "", "", "", "BUY"}
+			// entry := []string{"", "nexo.io", row[9], "", row[3], "", row[6][1:], "", "", "", "", "", "", "BUY"}
 			// TBD - list once things are separated by currency
 			//// output = append(output, entry)
-			fmt.Printf("NOT outputting %s: %s\n", row[1], entry)
+			//// fmt.Printf("NOT outputting %s: %s\n", row[1], entry)
 		case "ExchangeToWithdraw":
 		case "WithdrawExchanged":
 		case "DepositToExchange":
 		case "ExchangeDepositedOn":
-		case "LockingTermDeposit":
-		case "UnlockingTermDeposit":
 		default:
 			fmt.Printf("Unhandled switch option:[%s]\n", row[1])
 		}
