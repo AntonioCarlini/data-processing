@@ -79,6 +79,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -188,7 +189,23 @@ func convertTransactions(transactions [][]string) [][]string {
 			}
 			// Input Amount and Output Amount must be identical in absolute value the former is negative and the latter is positive.
 			if row[3][0] != '-' || row[3][1:] != row[5] {
-				fmt.Printf("TX %s: LockingTermDeposit currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+				valuesDiffer := true
+				if row[2] == "GBPX" {
+					inputAmountFloat, err := strconv.ParseFloat(row[3], 64)
+					if err != nil {
+						fmt.Printf("TX %s: LockingTermDeposit Input Amount conversion error: %s, issue: %s\n", row[0], row[3], err)
+					}
+					outputAmountFloat, err := strconv.ParseFloat(row[5], 64)
+					if err != nil {
+						fmt.Printf("TX %s: LockingTermDeposit Output Amount conversion error: %s, issue: %s\n", row[0], row[5], err)
+					}
+					if inputAmountFloat == -outputAmountFloat {
+						valuesDiffer = false
+					}
+				}
+				if valuesDiffer {
+					fmt.Printf("TX %s: LockingTermDeposit currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+				}
 			}
 			//       Details: "approved / Transfer from Savings Wallet to Term Wallet"
 			if !strings.HasPrefix(row[7], "approved / Transfer from Savings Wallet to Term Wallet") {
@@ -206,7 +223,23 @@ func convertTransactions(transactions [][]string) [][]string {
 			}
 			// Input Amount and Output Amount must be identical.
 			if row[3] != row[5] {
-				fmt.Printf("TX %s: UnlockingTermDeposit currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+				valuesDiffer := true
+				if row[2] == "GBPX" {
+					inputAmountFloat, err := strconv.ParseFloat(row[3], 64)
+					if err != nil {
+						fmt.Printf("TX %s: UnlockingTermDeposit Input Amount conversion error: %s, issue: %s\n", row[0], row[3], err)
+					}
+					outputAmountFloat, err := strconv.ParseFloat(row[5], 64)
+					if err != nil {
+						fmt.Printf("TX %s: UnlockingTermDeposit Output Amount conversion error: %s, issue: %s\n", row[0], row[5], err)
+					}
+					if inputAmountFloat == outputAmountFloat {
+						valuesDiffer = false
+					}
+				}
+				if valuesDiffer {
+					fmt.Printf("TX %s: UnlockingTermDeposit currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+				}
 			}
 			//       Details: "approved / Transfer from Term Wallet to Savings Wallet"
 			if !strings.HasPrefix(row[7], "approved / Transfer from Term Wallet to Savings Wallet") {
