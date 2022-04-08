@@ -14,6 +14,11 @@ package main
 //
 // One way to run it would be:
 //    go run convert-kraken.go kraken.csv standard_transactions.csv
+//
+// Some official information about the ledger format can be found here:
+//   https://support.kraken.com/hc/en-us/articles/360001169383-How-to-interpret-Ledger-history-fields
+// An explanation of why some ledger entries are duplicated can be found here:
+//   https://support.kraken.com/hc/en-us/articles/360001169443-Why-there-are-duplicate-entries-for-deposits-withdrawals
 
 import (
 	"encoding/csv"
@@ -101,7 +106,7 @@ func convertTransactions(transactions [][]string) [][]string {
 		csvRowIndex := i + 2
 		entry := ledger{csvRowIndex, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9]}
 
-		ukTime := convertKrakenToUKTime(entry.time)
+		ukTime := convertKrakenTimeToUKTime(entry.time)
 		rowValuesAcceptable := areRowValuesAcceptable(entry)
 
 		if entry.format == "deposit" {
@@ -346,32 +351,18 @@ func testSlicesEqual(a, b []string) bool {
 }
 
 // Converts from Kraken Exchange time to UK local time.
-// As the Kracken exchange time in the ledger is unknown, currently nothing is done.
-
-// During these dates (from https://www.gov.uk/when-do-the-clocks-change) the UK runs on GMT+1:
-//
-// 2020 	29 March 	25 October
-// 2021 	28 March 	31 October
-// 2022 	27 March 	30 October
-// 2023 	26 March 	29 October
-//
-// In practice the next BST date is in NOV-2021 so at least until 27-MAR-2022 no conversion needs to happen until then.
-func convertKrakenToUKTime(utcTime string) string {
+// The Kraken ledger is documented to record the time in UTC.
+func convertKrakenTimeToUKTime(utcTime string) string {
 	layout := "2006-01-02 15:04:05"
 	t, err := time.Parse(layout, utcTime)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error parsing time layout for time %s: %s\n", utcTime, err)
 	}
-	nextBST := time.Date(2022, 3, 27, 1, 0, 0, 0, time.UTC)
-	if t.After(nextBST) {
-		t = t.Add(time.Hour * 1)
-		log.Fatalf("Adjust code to handle incursion into 2022 BST")
-	}
-	result := t.Format(layout)
+	location, err := time.LoadLocation("Europe/London")
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error loading time location %s\n", err)
 	}
-	return result
+	return t.In(location).Format("2006-01-02 15:04:05")
 }
 
 // Check the supplied row values match expected values.
