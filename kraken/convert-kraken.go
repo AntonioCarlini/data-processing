@@ -1,26 +1,8 @@
 package main
 
-// Placeholder for kraken processor, based on crypto.com
+// Kraken exchange ledger CSV processor, based on crypto.com
 
-// "deposit"
-// fiat (ZGBP or ZEUR) with no txid is a fiat deposit. checked but not converted
-// 	crypto: indicates a TRANSFER-IN if there is a refid and txid (ignore if n txid, error if no refid)
-
-// "spend"
-// Must be either ZGBP or EUR.HOLD
-// Find matching "receive" with same refid, which should be for crypo.
-// these two together build a BUY transaction
-
-// "receive"
-// for crypto, usually matched with a "spend"?
-
-// "withdrawl"
-// so far must be crypto
-// may be matched with a "transfer", in which case this is a staking event
-
-// "staking"
-
-// This program takes a CSV from crypto.com and adjusts it into a format suitable for my records.
+// This program takes a CSV from Kraken and adjusts it into a format suitable for my records.
 // Where applicable it rearranges each row into a format that matches my exchange-independent records.
 // Each row entry that is expected to have a meaningful value is checked and errors are flagged on the command line.
 // Some rows do not produce any output but as much checking as possible is performed anyway to try to avoid silent corruption.
@@ -31,10 +13,7 @@ package main
 // The program takes two parameters: the input transactions (in CSV format) and a file into which to write the resulting converted transactions (in CSV format).
 //
 // One way to run it would be:
-//    go run convert-cdc.go crypto_dot_com.csv standard_transactions.csv
-
-// Notes:
-// Timestamps are in UTC. These are converted to UK local time. (Currently no conversion is necessary but it will be necessary starting in March 2022).
+//    go run convert-kraken.go kraken.csv standard_transactions.csv
 
 import (
 	"encoding/csv"
