@@ -173,40 +173,59 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 			}
 		case "spend":
-			// TBD: ensure that this code checks everything that is documented
-			// Simply preserve this in the spending map
-			// The only reasonable check is to make sure that the reference number is not already in the map
-			// TODO check txid not blank and format is valid
-			// TODO check subtype is blank
-			// TODO check that balance is not blank
+			// This entry only occurs as part of a token purchase.
+			// This entry provides details of the fiat currency used to purchase the token and the amount plus fee charged.
+			// The balance will be the amount of this fiat currency remaining after the transaction.
+			// Preserve this in the spending map so the data contained can be used when the corresponding "receive" is seen.
+			// One check is to make sure that the reference number is not already in the map
 			if prev, found := pendingSpends[entry.refid]; found {
 				fmt.Printf("Saw spend with repeated refid: %s (previous in row %d)\n", entry.refid, prev.row)
 			}
+			// Check txid not blank and format is valid
+			// Check subtype is blank
+			// Check that balance is not blank
+			// This will be re-checked later but report it now in case no correspdonding receive is seen
+			if entry.txid == "" || entry.subtype != "" || entry.balance == "" {
+				fmt.Printf("Saw 'spend' with missing fields in row %d\n", entry.row)
+			}
+			// Save the entry in the pendingSpends map for later use by a "receive"
 			pendingSpends[entry.refid] = entry
 		case "receive":
-			// TBD: ensure that this code checks everything that is documented
 			// Find the corresponding "spend" and use it to fill in the "BUY"
 			// Note that the actual spend is the amount plus the fee!
-			// Complain if the reference number is not already in the map
-			// TODO check txid not blank and format is valid
-			// TODO check subtype is blank
-			// TODO check that balance is not blank
-			// TODO handle a non-GBP spend
 			valid := true
 			spend, found := pendingSpends[entry.refid]
+			// Complain if the reference number is not already in the map
 			if !found {
-				fmt.Printf("Saw receive with no matching spend refid: %s (previous in row %d)\n", spend.refid, spend.row)
+				fmt.Printf("Saw 'receive' in row %d with no matching spend)\n", entry.row)
 				valid = false
-			}
-			totalSpend := calculateSpendAsString(spend)
-			if valid {
-				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY"}
-				output[entry.asset] = append(output[entry.asset], data)
 			} else {
-				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY **BAD DATA**"}
-				output[entry.asset] = append(output[entry.asset], data)
+				totalSpend := calculateSpendAsString(spend)
+				// Perform some checks for both the "receive" and the "spend" entries
+				// Check txid not blank and format is valid
+				// Check subtype is blank
+				// Check that balance is not blank
+				if entry.txid == "" || entry.subtype != "" || entry.balance == "" {
+					fmt.Printf("Saw 'receive' with missing fields in row %d\n", entry.row)
+					valid = false
+				}
+				if spend.txid == "" || spend.subtype != "" || spend.balance == "" {
+					fmt.Printf("Saw 'spend' with missing fields in row %d\n", entry.row)
+				}
+				// TODO handle a non-GBP spend; for now just flag it
+				if spend.asset != "ZGBP" {
+					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", entry.asset, entry.row)
+				}
+				if valid {
+					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY"}
+					output[entry.asset] = append(output[entry.asset], data)
+				} else {
+					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY **BAD DATA**"}
+					output[entry.asset] = append(output[entry.asset], data)
+				}
+				// Remove the "spend" entry that has now been used
+				delete(pendingSpends, entry.refid)
 			}
-			delete(pendingSpends, entry.refid)
 		case "withdrawal":
 			// TBD: ensure that this code checks everything that is documented
 			// TODO Comes in two types:
@@ -264,7 +283,7 @@ func convertTransactions(transactions [][]string) [][]string {
 					delete(pendingStakingDeposits, entry.refid)
 				}
 			} else {
-				fmt.Printf("Invalid subtype for transfer on row %d\n", entry.row)
+				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
 			}
 		case "staking":
 			// TBD: ensure that this code checks everything that is documented
