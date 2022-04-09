@@ -109,7 +109,9 @@ func convertTransactions(transactions [][]string) [][]string {
 		ukTime := convertKrakenTimeToUKTime(entry.time)
 		rowValuesAcceptable := areRowValuesAcceptable(entry)
 
-		if entry.format == "deposit" {
+		switch entry.format {
+		case "deposit":
+			// TBD: ensure that this code checks everything that is documented
 			// If fiat currency, then it can be ignored (only "ZGBP" or "ZEUR" or "EUR.HOLD" will be seen here).
 			// If the currency ends in ".S" then this is the staking version of the currency, so save it to later match against a "transfer".
 			// Otherwise this is a TRANSFER-IN of that currency.
@@ -131,7 +133,8 @@ func convertTransactions(transactions [][]string) [][]string {
 					output[entry.asset] = append(output[entry.asset], data)
 				}
 			}
-		} else if entry.format == "spend" {
+		case "spend":
+			// TBD: ensure that this code checks everything that is documented
 			// Simply preserve this in the spending map
 			// The only reasonable check is to make sure that the reference number is not already in the map
 			// TODO check txid not blank and format is valid
@@ -141,7 +144,8 @@ func convertTransactions(transactions [][]string) [][]string {
 				fmt.Printf("Saw spend with repeated refid: %s (previous in row %d)\n", entry.refid, prev.row)
 			}
 			pendingSpends[entry.refid] = entry
-		} else if entry.format == "receive" {
+		case "receive":
+			// TBD: ensure that this code checks everything that is documented
 			// Find the corresponding "spend" and use it to fill in the "BUY"
 			// Note that the actual spend is the amount plus the fee!
 			// Complain if the reference number is not already in the map
@@ -164,7 +168,8 @@ func convertTransactions(transactions [][]string) [][]string {
 				output[entry.asset] = append(output[entry.asset], data)
 			}
 			delete(pendingSpends, entry.refid)
-		} else if entry.format == "withdrawal" {
+		case "withdrawal":
+			// TBD: ensure that this code checks everything that is documented
 			// TODO Comes in two types:
 			// TODO (a) first has no txid, second has txid; asset, amount and fee must match; use time from second
 			// TODO (b) first has no txid, matches a transfer (spottostaking), asset must match and must not be a staked asset (no trailing .S)
@@ -189,7 +194,8 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 				delete(pendingWithdrawals, entry.refid)
 			}
-		} else if entry.format == "transfer" {
+		case "transfer":
+			// TBD: ensure that this code checks everything that is documented
 			// "transfer" is used to move a cryptocurrency into a staking pool, so it never produces any output
 			// TODO subtype must be either "spottostaking" or "stakingfromspot"
 			// TOOD subtype "spottostaking" must be matched with a pending withdrawal
@@ -221,7 +227,8 @@ func convertTransactions(transactions [][]string) [][]string {
 			} else {
 				fmt.Printf("Invalid subtype for transfer on row %d\n", entry.row)
 			}
-		} else if entry.format == "staking" {
+		case "staking":
+			// TBD: ensure that this code checks everything that is documented
 			// TODO tidy up but otherwise all is complete
 			valid := rowValuesAcceptable
 			stakedCurrency := strings.TrimSuffix(entry.asset, ".S")
@@ -249,7 +256,32 @@ func convertTransactions(transactions [][]string) [][]string {
 				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
 			}
-		} else {
+		case "trade":
+			// TBD
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		case "margin trade":
+			// TBD
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		case "rollover":
+			// TBD
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		case "adjustment":
+			// TBD
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		case "settled":
+			// TBD
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		case "reward":
+			// TBD
+			// This is documented as:
+			//    "reward" = credit of staking rewards
+			// and an undocumented format of "staking" does appear, so this is probably
+			// a documentation error and is intended to be "staking".
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		case "sale":
+			// TBD
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+		default:
 			fmt.Printf("UNRECOGNISED <%s>\n", entry.format)
 			// entry := []string{"***UNRECOGNISED***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "***INVALID***"}
 			// output[currency] = append(output[currency], entry)
@@ -376,6 +408,7 @@ func areRowValuesAcceptable(entry ledger) bool {
 		valid = false
 	}
 	if entry.aclass != "currency" {
+		// "aclass" is documentd as: "Asset Class. Value is always "currency". Not a useful field."
 		fmt.Printf("ledger entry row %d has invalid 'aclass'\n", entry.row)
 		valid = false
 	}
