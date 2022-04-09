@@ -19,6 +19,45 @@ package main
 //   https://support.kraken.com/hc/en-us/articles/360001169383-How-to-interpret-Ledger-history-fields
 // An explanation of why some ledger entries are duplicated can be found here:
 //   https://support.kraken.com/hc/en-us/articles/360001169443-Why-there-are-duplicate-entries-for-deposits-withdrawals
+//
+// Notes regarding how transactions are recorded in the ledger.
+// These are based partly on the documentation but mainly on observation of transactions in the ledger.
+//
+// Deposit of fiat currency into kraken
+//    - "deposit" or ZGBP or ZEUR or EUR.HOLD with blank txid and refid REF-A
+//    - "deposit" or ZGBP or ZEUR or EUR.HOLD with blank txid and refid REF-A
+//       (in the case of ZEUR, the second deposit will be for EUR.HOLD)
+//
+// Deposit of a token into kraken
+//    - "deposit" of token with refid REF-A and blank txid and blank balance
+//    - "deposit" of token with refid REF-A and non-blank txid and non-blank balance
+//
+// Purchase of a token:
+//    - "spend" of fiat with refid REF-A
+//    - "receive" of token with refid REF-A
+//
+// Staking of a token
+//    - "withdrawal" of token with blank txid and refid REF-A
+//    - "deposit" of token.S with blank txid and refid REF-B
+//    - "transfer" of token.S with refid REF-B and and subtype "stakingfromspot"
+//    - "transfer" of token with refid REF-A and subtype "spottostaking"
+//
+// Staking reward:
+//    - "deposit" of token.S with blank balance
+//    - "staking" of token.S with non-blank balance
+//
+//  Withdrawal of fiat currency from kraken
+//    TBD
+//
+//  This leads to the following observations about the format field:
+//
+//  "deposit":    seen when depositing fiat or tokens, staking and receving staking rewards.
+//  "withdrawal": seen when staking a token
+//  "transfer":   seen when staking a token
+//  "spend":      seen when purchasing a token
+//  "receive":    seen when purchasing a token
+//  "staking":    seen when receiving a staking rewards
+//
 
 import (
 	"encoding/csv"
@@ -400,7 +439,6 @@ func convertKrakenTimeToUKTime(utcTime string) string {
 // Check the supplied row values match expected values.
 // In the event of a problem, write to stdout and return false (i.e. not OK)
 // Must be present: "refid", "time", "type", "aclass", "asset", "amount", "fee"
-
 func areRowValuesAcceptable(entry ledger) bool {
 	valid := true
 	if entry.refid == "" || entry.time == "" || entry.format == "" || entry.asset == "" || entry.amount == "" || entry.fee == "" {
