@@ -140,6 +140,7 @@ func convertTransactions(transactions [][]string) [][]string {
 	pendingSpends := make(map[string]ledger)
 	pendingWithdrawals := make(map[string]ledger)
 	pendingStakingDeposits := make(map[string]ledger)
+	pendingTokenDeposits := make(map[string]ledger)
 
 	for i, row := range transactions[1:] {
 		csvRowIndex := i + 2
@@ -155,18 +156,43 @@ func convertTransactions(transactions [][]string) [][]string {
 			// If the currency ends in ".S" then this is the staking version of the currency, so save it to later match against a "transfer".
 			// Otherwise this is a TRANSFER-IN of that currency.
 			valid := rowValuesAcceptable
-			if entry.asset == "ZGBP" || entry.asset == "ZEUR" || entry.asset == "EUR.HOLD" {
+			if isFiatCurrency(entry.asset) {
 				// This is a fiat currency deposit and so does not need to be processed further
+				// TODO: check fiat deposits more thoroughly
 			} else if strings.HasSuffix(entry.asset, ".S") {
-				// This is a deposit of a staked currency (e.g. FLOW.S) which should later be matched by a "transfer"
+				// This is either:
+				//   a request to stake currency (e.g. FLOW.S) which should later be matched by a "transfer" with the same refid
+				// or
+				//   a staking reward which should later be matched by a "staking" with matching details
 				if prev, found := pendingStakingDeposits[entry.refid]; found {
 					fmt.Printf("Saw deposit of staked currency with repeated refid: %s (previous in row %d)\n", entry.refid, prev.row)
 				}
 				pendingStakingDeposits[entry.refid] = entry
 			} else {
+				// This is a deposit of a token into the Kraken wallet.
+				// Kraken lists these twice: firstly with a blank txid and a blank balance, and a second time with identical details but non-blank txid and balance. The same refid is used.
+				// Store the first entry in pendingTokenDeposist and check that it is there when the second entry is seen. Only second entry triggers an output.
+				// If only one but not both of txid and balance is blank, this is an unexpected error.
+				if (entry.txid == "" && entry.balance != "") || (entry.txid != "" && entry.balance == "") {
+					valid = false
+				}
 				if valid {
-					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN"}
-					output[entry.asset] = append(output[entry.asset], data)
+					if entry.txid == "" && entry.balance == "" {
+						// This is the first of two expected deposits relating to a token. Store it for later processing.
+						pendingTokenDeposits[entry.refid] = entry
+					} else {
+						if prev, found := pendingTokenDeposits[entry.refid]; !found {
+							fmt.Printf("Saw deposit of token in row %d with without preparatory deposit\n", entry.row)
+						} else {
+							if (entry.asset != prev.asset) || (entry.amount != prev.amount) || (entry.fee != prev.fee) {
+								fmt.Printf("Saw matching deposit of token from row %d with values that do not match row %d)\n", prev.row, entry.row)
+							} else {
+								data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN"}
+								output[entry.asset] = append(output[entry.asset], data)
+							}
+
+						}
+					}
 				} else {
 					data := []string{"**BAD DATA", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN **BAD DATA"}
 					output[entry.asset] = append(output[entry.asset], data)
@@ -214,7 +240,7 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 				// TODO handle a non-GBP spend; for now just flag it
 				if spend.asset != "ZGBP" {
-					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", entry.asset, entry.row)
+					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", spend.asset, spend.row)
 				}
 				if valid {
 					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY"}
@@ -530,4 +556,18 @@ func calculateSpendAsString(spend ledger) string {
 	finalPounds := totalPennies / 100
 	finalPennies := totalPennies - (finalPounds * 100)
 	return fmt.Sprintf("%s.%02.02s", strconv.Itoa(finalPounds), strconv.Itoa(finalPennies))
+}
+
+// Helper function that indicates whether the entry currency is an expected fiat one.
+// Note that the expected currencies are those that are known to have been used so
+// if an entry unexpectedly appears for a fiat currency that has not been used before (e.g. JPY)
+// it will be treated as a new token.
+func isFiatCurrency(currency string) bool {
+	acceptedFiatCurrencies := map[string]bool{
+		"ZGBP":     true,
+		"ZEUR":     true,
+		"EUR.HOLD": true,
+	}
+	_, found := acceptedFiatCurrencies[currency]
+	return found
 }
