@@ -171,7 +171,10 @@ func convertTransactions(transactions [][]string) [][]string {
 	// row[7] : Details
 	// row[8] : Outstanding Loan
 	// row[9] : Date / Time
-	output := make([][]string, 0)
+
+	output := make([][]string, 0)             // output (array of strings)
+	exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
+
 	for _, row := range transactions {
 		// So far, "Outstanding Loan" is *always* "$0.00", so check that immediately
 		if row[8] != "$0.00" {
@@ -365,12 +368,76 @@ func convertTransactions(transactions [][]string) [][]string {
 			//// output = append(output, entry)
 			//// fmt.Printf("NOT outputting %s: %s\n", row[1], entry)
 		case "ExchangeToWithdraw":
+			// ExchangeToWithDraw represents the first of two operations that are involved in removing funds from NEXO.
+			// This transaction records a 1:1 converion of GBPX to GBP.
+			// There should be a correspodning (later) matching WithdrawExchanged that records the actual removal of the funds.
+			// For now it is assumed that the corresponding WithdrawExchanged records occur in the same order as the corresponding
+			// ExchangeToWithdraw records so that all that is needed to match is a simple FIFO.
+			// [2] will always be GBPX
+			// [3] will be a negative amount and [5] will be the corresponding positive amount
+			// [4] will always be GBP
+			// [6] will be the dollar equivalent (just check that it starts '$)
+			// [7] will be "approved / GBPX to GBP"
+			// [9] is date/time in CET
+			if (row[2] != "GBPX") || (row[4] != "GBP") {
+				fmt.Printf("TX %s: ExchangeToWithdraw does not use GBP [%s,%s]\n", row[0], row[2], row[4])
+			}
+			//if (row[3] >= -22) || (row[3] != -row[5]) {
+			//	fmt.Printf("TX %s: ExchangeToWithdraw amount inconsistent [%s,%s]\n", row[0], row[3], row[5])
+			//}
+			if row[6][0] != '$' {
+				fmt.Printf("TX %s: ExchangeToWithdraw dollar equivalent invalid [%s]\n", row[0], row[6])
+			}
+			if row[7] != "approved / GBPX to GBP" {
+				fmt.Printf("TX %s: ExchangeToWithdraw details invalid [%s]\n", row[0], row[7])
+			}
+			exchangeToWithdraw = append(exchangeToWithdraw, row) // Add the record to the FIFO
 		case "WithdrawExchanged":
+			// WithdrawExchanged represents the second of two operations that are involved in removing funds from NEXO.
+			// This transaction records the actual withdrawal of GBP from NEXO.
+			// There should be a corresponding (earlier) matching ExchangeToWithdraw.
+			// [2] will always be GBPX
+			// [3] will be a negative amount and [5] will be the corresponding positive amount
+			// [4] will always be GBP
+			// [6] will be the dollar equivalent (just check that it starts '$)
+			// [7] will be "approved / GBPX to GBP"
+			// [9] is date/time in CET
+			if (row[2] != "GBP") || (row[4] != "GBP") {
+				fmt.Printf("TX %s: ExchangeToWithdraw does not use GBP [%s,%s]\n", row[0], row[2], row[4])
+			}
+			//if (row[3] >= -22) || (row[3] != -row[5]) {
+			//	fmt.Printf("TX %s: ExchangeToWithdraw amount inconsistent [%s,%s]\n", row[0], row[3], row[5])
+			//}
+			if row[6][0] != '$' {
+				fmt.Printf("TX %s: ExchangeToWithdraw dollar equivalent invalid [%s]\n", row[0], row[6])
+			}
+			if row[7] != "approved / GBP withdrawal" {
+				fmt.Printf("TX %s: ExchangeToWithdraw details invalid [%s]\n", row[0], row[7])
+			}
+			if len(exchangeToWithdraw) < 0 {
+				fmt.Printf("TX %s: WithdrawExchanged with no matching ExchangeToWithdraw\n", row[0])
+			} else {
+				matchingExchangeToWithdraw := exchangeToWithdraw[0] // Get the presumed matching record
+				exchangeToWithdraw = exchangeToWithdraw[1:]         // Remove that record from the FIFO
+				// Both this record and the presumed matching ExchangeToWithdraw have been checked for validity.
+				// To check for a match asll that is needed is that "Input Amount" [3], "Output Currency" [4]
+				// Note that "USD Equivalent" may not match presumably because the £/$ exchange rate may drift slightly
+				// between the times when the ExchangeToWithdraw and the WithdrawExchanged happen.
+				if (row[3] != matchingExchangeToWithdraw[3]) || (row[4] != matchingExchangeToWithdraw[4]) {
+					fmt.Printf("TX %s: WithdrawExchanged finds non-matching ExchangeToWithdraw [TX: %s]\n", row[0], matchingExchangeToWithdraw[0])
+				}
+			}
+			// Nothing needs to be recorded for a removal of fiat from NEXO
 		case "DepositToExchange":
 		case "ExchangeDepositedOn":
 		default:
 			fmt.Printf("Unhandled switch option:[%s]\n", row[1])
 		}
+	}
+
+	// At this point the exchangeToWithdraw FIFO should be empty
+	if len(exchangeToWithdraw) > 0 {
+		fmt.Printf("There are ")
 	}
 
 	return output
@@ -394,12 +461,18 @@ func writeConvertedTransactions(filename string, data [][]string) {
 	err = w.WriteAll(data)
 }
 
+// Checks that two slices are identical.
+// Checks that:
+//  * the number of elements is identical
+//  * the corresponding elements match exactly
 func testSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
+		fmt.Printf("slice diff len: len-a %d len-b: %d\n", len(a), len(b))
 		return false
 	}
 	for i := range a {
 		if a[i] != b[i] {
+			fmt.Printf("slice mismatch at %d: <%s> vs <%s>\n", i, a[i], b[i])
 			return false
 		}
 	}
