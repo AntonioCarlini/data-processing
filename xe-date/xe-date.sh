@@ -2,16 +2,25 @@
 
 # Fetch the historical USD to GBP exchange rate for a range of dates.
 
+# Invoke with either a single date (to fetch the value on that date only) or a start date
+# and an end date. The dates must be in the format YYYY-MM-DD.
+# So:
+# Fetch the USD->GBP exchange rate for 1st Feb 2022
+# ./xe-date.sh 2022-02-01
+#
+# Fetch the USD->GBP exchange rate for every day from 1st May 2021 until 10th Sep 2021 (inclusive)
+# ./xe-date.sh 2021-05-01 2021-09-10 # 
+
 # This function accepts a date in YYYY-MM-DD format and fetches a table that contains the
-# required exchange value. It then find the single line that contains the required value
+# required exchange value. It then findx the single line that contains the required value
 # and uses sed to extract just the USD=>GBP exchange rate as a number.
-# The result is written to stdout as "date,value", so that a CSV file of successive data
+# The result is written to stdout as "date,,value", so that a CSV file of successive data
 # can be built up.
-fetch_usd_gbp_for_date() {
+fetch_and_display_usd_gbp_for_date() {
     gbp=$(wget  -q -O - "https://www.xe.com/currencytables/?from=USD&date=$1#table-section" |
     grep -E 'GBP<\/a><\/th><td>British Pound<\/td><td>[[:digit:]]+' |
     sed -rn 's/(.*)(GBP<\/a><\/th><td>British Pound<\/td><td>)([\.[:digit:]]+)(.*)/\3/p')
-    echo "$1,${gbp}"
+    echo "$1,,${gbp}"
 }
 
 
@@ -69,7 +78,7 @@ main() {
     fi
 
     # Always perform a lookup for the start date
-    fetch_usd_gbp_for_date "${start_date}"
+    fetch_and_display_usd_gbp_for_date "${start_date}"
     # Stop if no end date was specified (i.e. perform only one lookup for the start date).
     if [[ "${end_date}" == "" ]]; then
         exit 0
@@ -79,7 +88,7 @@ main() {
     until [[ "${next_date}" == "${end_date}" ]]
     do
         next_date=$(date "+%Y-%m-%d" -d "${next_date} next day")
-        fetch_usd_gbp_for_date "${next_date}"
+        fetch_and_display_usd_gbp_for_date "${next_date}"
     done
 
     #fetch_date 2022-03-03
