@@ -326,6 +326,11 @@ func convertTransactions(transactions [][]string) [][]string {
 			// Nothing yet recorded because I do not know how to record it!
 		case "Exchange":
 			// "Exchange" transactions represent a purchase and need to be recorded as "BUY"
+			// TBD: "GBPX/token" is a purchase of that token
+			// TBD: "tokenA/tokenB" is a SELL of tokenA followed by a BUY of tokenB. both prices are in $
+			// TBD: split row[2] at "tokenA/tokenB"
+			// TBD: if tokenA is GBPX, treat as a BUY of row[5] units of tokenB at row[6] USD
+			// TBD: otherwise treat as sale of tokenA for tokenB; unfortunately amount of tokenA is not available!!
 			// The Output Currency must be one of BTC, NEXO, USDC, UST
 			allowedExchangeCurrency := map[string]bool{
 				"BTC":  true,
@@ -346,10 +351,6 @@ func convertTransactions(transactions [][]string) [][]string {
 			if row[3] != expectedInputAmount {
 				fmt.Printf("TX %s: Exchange input amount error: expected: %s, actual: %s\n", row[0], expectedInputAmount, row[3])
 			}
-			// Input Amount and Output Amount must be identical
-			if row[3] != row[5] {
-				// TBD fmt.Printf("TX %s: Interest currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
-			}
 			// Details: "approved / Nexonomics Exchange Cash-back Promotion"
 			// TDB
 			//if row[7] != "approved / Nexonomics Exchange Cash-back Promotion" {
@@ -359,9 +360,6 @@ func convertTransactions(transactions [][]string) [][]string {
 			if row[6][0] != '$' {
 				fmt.Printf("TX %s: Deposit not in dollars [%s]\n", row[0], row[6])
 			}
-			// [3] is amount of nexo
-			// [6] is USD earned (but the "$" needs to be stripped)
-			// [9] is date/time in CET
 			// Output should be "nexo.io", date/time, uk date/time, nexo, (price), total, exch, £, "", "", "", "", "STAKING"
 			// entry := []string{"", "nexo.io", row[9], "", row[3], "", row[6][1:], "", "", "", "", "", "", "BUY"}
 			// TBD - list once things are separated by currency
@@ -373,21 +371,36 @@ func convertTransactions(transactions [][]string) [][]string {
 			// There should be a correspodning (later) matching WithdrawExchanged that records the actual removal of the funds.
 			// For now it is assumed that the corresponding WithdrawExchanged records occur in the same order as the corresponding
 			// ExchangeToWithdraw records so that all that is needed to match is a simple FIFO.
-			// [2] will always be GBPX
-			// [3] will be a negative amount and [5] will be the corresponding positive amount
-			// [4] will always be GBP
-			// [6] will be the dollar equivalent (just check that it starts '$)
-			// [7] will be "approved / GBPX to GBP"
-			// [9] is date/time in CET
+
+			// "Input Currency" will always be GBPX and "Output Currency" will always be GBP
 			if (row[2] != "GBPX") || (row[4] != "GBP") {
 				fmt.Printf("TX %s: ExchangeToWithdraw does not use GBP [%s,%s]\n", row[0], row[2], row[4])
 			}
-			//if (row[3] >= -22) || (row[3] != -row[5]) {
-			//	fmt.Printf("TX %s: ExchangeToWithdraw amount inconsistent [%s,%s]\n", row[0], row[3], row[5])
-			//}
+			// Input Amount and Output Amount must be identical in absolute value the former is negative and the latter is positive.
+			if row[3][0] != '-' || row[3][1:] != row[5] {
+				valuesDiffer := true
+				if row[2] == "GBPX" {
+					inputAmountFloat, err := strconv.ParseFloat(row[3], 64)
+					if err != nil {
+						fmt.Printf("TX %s: ExchangeToWithdraw Input Amount conversion error: %s, issue: %s\n", row[0], row[3], err)
+					}
+					outputAmountFloat, err := strconv.ParseFloat(row[5], 64)
+					if err != nil {
+						fmt.Printf("TX %s: ExchangeToWithdraw Output Amount conversion error: %s, issue: %s\n", row[0], row[5], err)
+					}
+					if inputAmountFloat == -outputAmountFloat {
+						valuesDiffer = false
+					}
+				}
+				if valuesDiffer {
+					fmt.Printf("TX %s: ExchangeToWithdraw currency amount error: input: %s, output: %s\n", row[0], row[3], row[5])
+				}
+			}
+			// [6] will be the dollar equivalent (just check that it starts '$)
 			if row[6][0] != '$' {
 				fmt.Printf("TX %s: ExchangeToWithdraw dollar equivalent invalid [%s]\n", row[0], row[6])
 			}
+			// [7] will be "approved / GBPX to GBP"
 			if row[7] != "approved / GBPX to GBP" {
 				fmt.Printf("TX %s: ExchangeToWithdraw details invalid [%s]\n", row[0], row[7])
 			}
@@ -429,7 +442,9 @@ func convertTransactions(transactions [][]string) [][]string {
 			}
 			// Nothing needs to be recorded for a removal of fiat from NEXO
 		case "DepositToExchange":
+			fmt.Printf("Unhandled switch option:[%s]\n", row[1])
 		case "ExchangeDepositedOn":
+			fmt.Printf("Unhandled switch option:[%s]\n", row[1])
 		default:
 			fmt.Printf("Unhandled switch option:[%s]\n", row[1])
 		}
