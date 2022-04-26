@@ -79,6 +79,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -161,14 +162,14 @@ func convertTransactions(transactions [][]string) [][]string {
 	// What is the correct way of handling NEXO/USDC and USDC/UST transactions?
 	// Note that a GBPX=>NEXO transaction does not record the amount of GBPX exchanged, only the dollar equivalent.
 
-	// row[tx_ID] : Transaction
-	// row[1] : Type
-	// row[tx_InputCurrency] : Input Currency
-	// row[tx_InputAmount] : Input Amount
-	// row[tx_OutputCurrency] : Output Currency
-	// row[tx_OutputAmount] : Output Amount
-	// row[tx_UsdEquivalent] : USD Equivalent
-	// row[tx_Details] : Details
+	// row[tx_ID] :              Transaction
+	// row[1] :                  Type
+	// row[tx_InputCurrency] :   Input Currency
+	// row[tx_InputAmount] :     Input Amount
+	// row[tx_OutputCurrency] :  Output Currency
+	// row[tx_OutputAmount] :    Output Amount
+	// row[tx_UsdEquivalent] :   USD Equivalent
+	// row[tx_Details] :         Details
 	// row[tx_OutstandingLoan] : Outstanding Loan
 	// row[tx_DateTime] : Date / Time
 	const ( // iota is reset to 0
@@ -183,7 +184,7 @@ func convertTransactions(transactions [][]string) [][]string {
 		tx_OutstandingLoan = 8 //
 		tx_DateTime        = 9 //
 	)
-	output := make([][]string, 0)             // output (array of strings)
+	output := make(map[string][][]string, 0)  // map of currency => array of strings
 	exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
 	depositToExchange := make([][]string, 0)  // FIFO queue or records
 
@@ -291,7 +292,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			// Output should be "nexo.io", date/time, uk date/time, nexo, (price), total, exch, £, "", "", "", "", "STAKING"
 			// Double check that the "USD equivalent" is stated in USD
 			entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "STAKING"}
-			output = append(output, entry)
+			output[row[tx_InputCurrency]] = append(output[row[tx_InputCurrency]], entry)
 		case "Deposit":
 			// "Deposit" transactions need to be recorded as "REWARD"
 
@@ -316,7 +317,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			// [9] is date/time in CET
 			// Output should be "nexo.io", date/time, uk date/time, nexo, (price), total, exch, £, "", "", "", "", "STAKING"
 			entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "REWARD"}
-			output = append(output, entry)
+			output[row[tx_InputCurrency]] = append(output[row[tx_InputCurrency]], entry)
 		case "Exchange Cashback":
 			// Input/Output Currency must be BTC (because that is the only example so far)
 			if (row[tx_InputCurrency] != "BTC") || (row[tx_OutputCurrency] != "BTC") {
@@ -337,24 +338,32 @@ func convertTransactions(transactions [][]string) [][]string {
 			// TBD
 			// Nothing yet recorded because I do not know how to record it!
 		case "Exchange":
-			// "Exchange" transactions represent a purchase and need to be recorded as "BUY"
-			// TBD: "GBPX/token" is a purchase of that token
-			// TBD: "tokenA/tokenB" is a SELL of tokenA followed by a BUY of tokenB. both prices are in $
-			// TBD: split row[tx_InputCurrency] at "tokenA/tokenB"
-			// TBD: if tokenA is GBPX, treat as a BUY of row[tx_OutputAmount] units of tokenB at row[tx_UsdEquivalent] USD
-			// TBD: otherwise treat as sale of tokenA for tokenB; unfortunately amount of tokenA is not available!!
-			// The Output Currency must be one of BTC, NEXO, USDC, UST
+			// "Exchange" transactions represent a purchase and need to be recorded as "BUY" if the starting token is "GBPX".
+			// Otherwise this is a sale of tokenA for tokenB.
+			// Token-B must be one of BTC, NEXO, USDC, UST
+			// For a £GBP purchase, the £GBP amount is not known, only the USD equivalent.
+			// For a £GBP purchase, token price at purchaase is not known, only the USD equivalent.
+			// For a non-£GBP exchange, nothing is known about token-A other than the USD equivalent.
+			// For a non-£GBP exchange, only the number of units and the USD equivalent are known about token-B.
+			// To avoid issues in transferring these values to a master spreadsheet, values that need to be examined are prefixed with "!!".
+
 			allowedExchangeCurrency := map[string]bool{
 				"BTC":  true,
 				"NEXO": true,
 				"USDC": true,
 				"UST":  true,
 			}
-			if !allowedExchangeCurrency[row[tx_OutputCurrency]] {
-				fmt.Printf("TX %s: Exchange output currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
+
+			tokens := strings.SplitN(row[tx_InputCurrency], "/", 2)
+			startingToken := tokens[0]
+			endingToken := tokens[1]
+
+			if !allowedExchangeCurrency[endingToken] {
+				fmt.Printf("TX %s: Exchange ending currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
 			}
-			// Input Currency must be GBPX/???? where ???? is the Output Currency
-			expectedInputCurrency := "GBPX/" + row[tx_OutputCurrency]
+
+			// Input Currency must be toekn-A/token-B where token-B is the Output Currency
+			expectedInputCurrency := startingToken + "/" + endingToken
 			if row[tx_InputCurrency] != expectedInputCurrency {
 				fmt.Printf("TX %s: Exchange input currency error: expected: %s, actual: %s\n", row[tx_ID], expectedInputCurrency, row[tx_InputCurrency])
 			}
@@ -371,6 +380,24 @@ func convertTransactions(transactions [][]string) [][]string {
 			// Double check that the "USD equivalent" is stated in USD
 			if row[tx_UsdEquivalent][0] != '$' {
 				fmt.Printf("TX %s: Deposit not in dollars [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
+			}
+
+			if startingToken == "GBPX" {
+				// This is a BUY of the OutputCurrency
+				notes := "Purchased " + row[tx_OutputCurrency] + " using £GBP"
+				entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_OutputAmount], "", "!! " + row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", "", notes}
+				output[endingToken] = append(output[endingToken], entry)
+			} else {
+				if !allowedExchangeCurrency[startingToken] {
+					fmt.Printf("TX %s: Exchange starting currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
+				}
+				// This is a SELL of the startingToken and a BUY of the OutputCurrency
+				notes := "Exchanged " + startingToken + " for " + endingToken
+				entry := []string{"", "nexo.io", row[tx_DateTime], "", "!! " + row[tx_OutputAmount], "", "!! " + row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "SELL", "", "", "", "", "", "", "", "", "", "", notes}
+				output[startingToken] = append(output[startingToken], entry)
+				entry = []string{"", "nexo.io", row[tx_DateTime], "", row[tx_OutputAmount], "", "!! " + row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", "", notes}
+				output[endingToken] = append(output[endingToken], entry)
+
 			}
 			// Output should be "nexo.io", date/time, uk date/time, nexo, (price), total, exch, £, "", "", "", "", "STAKING"
 			// entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "BUY"}
@@ -521,7 +548,46 @@ func convertTransactions(transactions [][]string) [][]string {
 		fmt.Printf("There are ")
 	}
 
-	return output
+	// Find all the currencies in the map
+	// For some reason BTC is recorded as XXBT, ETH as XETH and DOGE as XXDG, so allow for this
+	currencyTranslation := map[string]string{"XXBT": "BTC", "XXDG": "DOGE", "XETH": "ETH"}
+	currencies := make([]string, 0)
+	for k := range output {
+		if replacement, found := currencyTranslation[k]; found {
+			k = replacement
+		}
+		currencies = append(currencies, k)
+	}
+	sort.Strings(currencies)
+
+	// Loop through currencies and produce an output that contains all the data categorised by currency
+	// If the currency is not found that's because here we're looping through the corrected versions of the currencies (i.e. BTC and not XXBT),
+	// so in that case find the original currency the hard way by doing a reverse lookup in the currencyTranslation map
+	finalOutput := make([][]string, 0)
+	for _, c := range currencies {
+		data, found := output[c]
+		if !found {
+			for originalCurrency, translatedCurrency := range currencyTranslation {
+				if translatedCurrency == c {
+					data, found = output[originalCurrency]
+					if !found {
+						fmt.Printf("Failed to find data for translated currency %s (originally %s)\n", c, originalCurrency)
+					}
+					break
+				}
+			}
+		}
+		// Append the data and a prefix/postfix to the overall output
+		finalOutput = append(finalOutput, []string{"", ""})
+		finalOutput = append(finalOutput, []string{"", ""})
+		finalOutput = append(finalOutput, []string{c, "Data for a fixed currency"})
+		for _, v := range data {
+			finalOutput = append(finalOutput, v)
+		}
+		finalOutput = append(finalOutput, []string{"", ""})
+	}
+
+	return finalOutput
 }
 
 func writeConvertedTransactions(filename string, data [][]string) {
