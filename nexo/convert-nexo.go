@@ -354,29 +354,48 @@ func convertTransactions(transactions [][]string) [][]string {
 				"UST":  true,
 			}
 
+			startingToken := "INVALID-TOKEN-A"
+			endingToken := "INVALID-TOKEN-B"
+			amountStartingToken := row[tx_InputAmount]
+			amountUSD := "!! " + row[tx_UsdEquivalent][1:]
+			amountEndingToken := row[tx_OutputAmount]
 			tokens := strings.SplitN(row[tx_InputCurrency], "/", 2)
-			startingToken := tokens[0]
-			endingToken := tokens[1]
-
-			if !allowedExchangeCurrency[endingToken] {
-				fmt.Printf("TX %s: Exchange ending currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
+			if len(tokens) == 2 {
+				fmt.Println("Old format (pre middle 2022-APR)")
+				startingToken = tokens[0]
+				endingToken = tokens[1]
+				// TODO: set to keep output unchanged for old-style data files
+				if startingToken == "GBPX" {
+					amountStartingToken = "!"
+				} else {
+					amountStartingToken = "!! " + row[tx_OutputAmount]
+				}
+				amountEndingToken = row[tx_OutputAmount] // TODO required for GBP "BUY"
+				// Input Currency must be token-A/token-B where token-B is the Output Currency
+				expectedInputCurrency := startingToken + "/" + endingToken
+				if !allowedExchangeCurrency[endingToken] {
+					fmt.Printf("TX %s: Exchange ending currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
+				}
+				if row[tx_InputCurrency] != expectedInputCurrency {
+					fmt.Printf("TX %s: Exchange input currency error: expected: %s, actual: %s\n", row[tx_ID], expectedInputCurrency, row[tx_InputCurrency])
+				}
+				// Input Amount is the text of Output Currency followed by Output Amount
+				expectedInputAmount := row[tx_OutputCurrency] + " " + row[tx_OutputAmount]
+				if row[tx_InputAmount] != expectedInputAmount {
+					fmt.Printf("TX %s: Exchange input amount error: expected: %s, actual: %s\n", row[tx_ID], expectedInputAmount, row[tx_InputAmount])
+				}
+			} else if len(tokens) == 1 {
+				fmt.Println("New format (post middle 2022-APR)")
+				startingToken = row[tx_InputCurrency]
+				endingToken = row[tx_OutputCurrency]
+				amountStartingToken = row[tx_InputAmount]
+				amountEndingToken = row[tx_OutputAmount]
+				amountUSD = row[tx_UsdEquivalent][1:]
+			} else {
+				fmt.Printf("TX %s: Exchange Input Currency format error: %s\n", row[tx_ID], row[tx_InputCurrency])
+				continue
 			}
 
-			// Input Currency must be toekn-A/token-B where token-B is the Output Currency
-			expectedInputCurrency := startingToken + "/" + endingToken
-			if row[tx_InputCurrency] != expectedInputCurrency {
-				fmt.Printf("TX %s: Exchange input currency error: expected: %s, actual: %s\n", row[tx_ID], expectedInputCurrency, row[tx_InputCurrency])
-			}
-			// Input Amount is the text of Output Currency followed by Output Amount
-			expectedInputAmount := row[tx_OutputCurrency] + " " + row[tx_OutputAmount]
-			if row[tx_InputAmount] != expectedInputAmount {
-				fmt.Printf("TX %s: Exchange input amount error: expected: %s, actual: %s\n", row[tx_ID], expectedInputAmount, row[tx_InputAmount])
-			}
-			// Details: "approved / Nexonomics Exchange Cash-back Promotion"
-			// TDB
-			//if row[tx_Details] != "approved / Nexonomics Exchange Cash-back Promotion" {
-			//	fmt.Printf("TX %s: Deposit Details error: input: %s\n", row[tx_ID], row[tx_Details])
-			//}
 			// Double check that the "USD equivalent" is stated in USD
 			if row[tx_UsdEquivalent][0] != '$' {
 				fmt.Printf("TX %s: Deposit not in dollars [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
@@ -385,17 +404,18 @@ func convertTransactions(transactions [][]string) [][]string {
 			if startingToken == "GBPX" {
 				// This is a BUY of the OutputCurrency
 				notes := "Purchased " + row[tx_OutputCurrency] + " using £GBP"
-				entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_OutputAmount], "", "!! " + row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", "", notes}
+				entry := []string{"", "nexo.io", row[tx_DateTime], "", amountEndingToken, "", amountUSD, "", amountStartingToken[1:], "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", "", notes}
 				output[endingToken] = append(output[endingToken], entry)
 			} else {
 				if !allowedExchangeCurrency[startingToken] {
 					fmt.Printf("TX %s: Exchange starting currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
 				}
-				// This is a SELL of the startingToken and a BUY of the OutputCurrency
 				notes := "Exchanged " + startingToken + " for " + endingToken
-				entry := []string{"", "nexo.io", row[tx_DateTime], "", "!! " + row[tx_OutputAmount], "", "!! " + row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "SELL", "", "", "", "", "", "", "", "", "", "", notes}
+				// This is a SELL of the startingToken ...
+				entry := []string{"", "nexo.io", row[tx_DateTime], "", amountStartingToken, "", amountUSD, "", "", "", "", "", "", "SELL", "", "", "", "", "", "", "", "", "", "", notes}
 				output[startingToken] = append(output[startingToken], entry)
-				entry = []string{"", "nexo.io", row[tx_DateTime], "", row[tx_OutputAmount], "", "!! " + row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", "", notes}
+				// ... and a BUY of the endingToken
+				entry = []string{"", "nexo.io", row[tx_DateTime], "", amountEndingToken, "", amountUSD, "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", "", notes}
 				output[endingToken] = append(output[endingToken], entry)
 
 			}
