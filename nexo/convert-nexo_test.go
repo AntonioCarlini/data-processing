@@ -12,7 +12,7 @@ const test_output_currency = "NEXO"
 const test_input_amount = "0.11"
 const test_output_amount = "0.22"
 const test_usd_equiv = "$98.76"
-const test_detail = "approved/detail text"
+const test_detail = "approved / detail text"
 const test_outstanding_loan = "$0.00"
 
 type OutsandingLoanTestData struct {
@@ -39,10 +39,16 @@ func TestOutStandingLoan(t *testing.T) {
 		testRow[tx_OutstandingLoan] = s.outstandingLoan
 		outputError := convertSingleTransaction(testRow, &output, &exchangeToWithdraw, &depositToExchange)
 
-		// output, exch2Withdraw and dep2Exchange should always be empty
-		if len(output) != 0 {
-			t.Errorf("output: got %q, wanted %q", output, "")
+		// The output map should have one key (NEXO) and one entry under that key
+		if len(output) != 1 {
+			t.Errorf("output: got %q, wanted exactly 1 entry (for key NEXO)", output)
 		}
+
+		if len(output["NEXO"]) != 1 {
+			t.Errorf("output: got %q, wanted 1 entry for NEXO", output)
+		}
+
+		// exch2Withdraw and dep2Exchange should always be empty
 		if len(exchangeToWithdraw) != 0 {
 			t.Errorf("exchangeToWithdraw: got %q, wanted %q", exchangeToWithdraw, "")
 		}
