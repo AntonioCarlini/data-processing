@@ -152,6 +152,29 @@ func readTransactions(name string) [][]string {
 	return transactions
 }
 
+// row[tx_ID] :              Transaction
+// row[1] :                  Type
+// row[tx_InputCurrency] :   Input Currency
+// row[tx_InputAmount] :     Input Amount
+// row[tx_OutputCurrency] :  Output Currency
+// row[tx_OutputAmount] :    Output Amount
+// row[tx_UsdEquivalent] :   USD Equivalent
+// row[tx_Details] :         Details
+// row[tx_OutstandingLoan] : Outstanding Loan
+// row[tx_DateTime] : Date / Time
+const ( // iota is reset to 0
+	tx_ID              = 0 // transaction ID
+	tx_Type            = 1 //
+	tx_InputCurrency   = 2 //
+	tx_InputAmount     = 3 //
+	tx_OutputCurrency  = 4 //
+	tx_OutputAmount    = 5 //
+	tx_UsdEquivalent   = 6 //
+	tx_Details         = 7 //
+	tx_OutstandingLoan = 8 //
+	tx_DateTime        = 9 //
+)
+
 func convertTransactions(transactions [][]string) [][]string {
 
 	// TBD
@@ -162,33 +185,17 @@ func convertTransactions(transactions [][]string) [][]string {
 	// What is the correct way of handling NEXO/USDC and USDC/UST transactions?
 	// Note that a GBPX=>NEXO transaction does not record the amount of GBPX exchanged, only the dollar equivalent.
 
-	// row[tx_ID] :              Transaction
-	// row[1] :                  Type
-	// row[tx_InputCurrency] :   Input Currency
-	// row[tx_InputAmount] :     Input Amount
-	// row[tx_OutputCurrency] :  Output Currency
-	// row[tx_OutputAmount] :    Output Amount
-	// row[tx_UsdEquivalent] :   USD Equivalent
-	// row[tx_Details] :         Details
-	// row[tx_OutstandingLoan] : Outstanding Loan
-	// row[tx_DateTime] : Date / Time
-	const ( // iota is reset to 0
-		tx_ID              = 0 // transaction ID
-		tx_Type            = 1 //
-		tx_InputCurrency   = 2 //
-		tx_InputAmount     = 3 //
-		tx_OutputCurrency  = 4 //
-		tx_OutputAmount    = 5 //
-		tx_UsdEquivalent   = 6 //
-		tx_Details         = 7 //
-		tx_OutstandingLoan = 8 //
-		tx_DateTime        = 9 //
-	)
 	output := make(map[string][][]string, 0)  // map of currency => array of strings
 	exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
 	depositToExchange := make([][]string, 0)  // FIFO queue or records
 
 	for _, row := range transactions {
+		//
+		// func convertSingleTransaction(row) (string, string, string)
+		// produce three strings:
+		// output, ex2W, dep2Ex
+		_, _, _, _ = convertSingleTransaction(row)
+
 		// So far, "Outstanding Loan" is *always* "$0.00", so check that immediately
 		if row[tx_OutstandingLoan] != "$0.00" {
 			fmt.Printf("TX %s: Outstanding Load error: %s\n", row[tx_ID], row[tx_OutstandingLoan])
@@ -608,6 +615,20 @@ func convertTransactions(transactions [][]string) [][]string {
 	}
 
 	return finalOutput
+}
+
+func convertSingleTransaction(row []string) (string, string, string, string) {
+	// produce three strings:
+	// output, ex2W, dep2Ex
+	output := ""
+	exchangeToWithdraw := ""
+	depositToExchange := ""
+	errorOutput := ""
+
+	if row[tx_OutstandingLoan] != "$0.00" {
+		errorOutput = fmt.Sprintf("TX %s: Outstanding Load error: %s\n", row[tx_ID], row[tx_OutstandingLoan])
+	}
+	return output, exchangeToWithdraw, depositToExchange, errorOutput
 }
 
 func writeConvertedTransactions(filename string, data [][]string) {
