@@ -32,18 +32,22 @@ func TestOutStandingLoan(t *testing.T) {
 	}
 
 	for _, s := range tests {
+		output := make(map[string][][]string, 0)  // map of currency => array of strings
+		exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
+		depositToExchange := make([][]string, 0)  // FIFO queue or records
+
 		testRow[tx_OutstandingLoan] = s.outstandingLoan
-		output, exch2Withdraw, dep2Exchange, outputError := convertSingleTransaction(testRow)
+		outputError := convertSingleTransaction(testRow, &output, &exchangeToWithdraw, &depositToExchange)
 
 		// output, exch2Withdraw and dep2Exchange should always be empty
-		if output != "" {
+		if len(output) != 0 {
 			t.Errorf("output: got %q, wanted %q", output, "")
 		}
-		if exch2Withdraw != "" {
-			t.Errorf("exch2Withdraw: got %q, wanted %q", exch2Withdraw, "")
+		if len(exchangeToWithdraw) != 0 {
+			t.Errorf("exchangeToWithdraw: got %q, wanted %q", exchangeToWithdraw, "")
 		}
-		if dep2Exchange != "" {
-			t.Errorf("dep2Exchange: got %q, wanted %q", dep2Exchange, "")
+		if len(depositToExchange) != 0 {
+			t.Errorf("depositToExchange: got %q, wanted %q", depositToExchange, "")
 		}
 
 		if s.errorOutputExpected && (len(outputError) < 1) {
@@ -53,7 +57,6 @@ func TestOutStandingLoan(t *testing.T) {
 		if !s.errorOutputExpected && (len(outputError) > 1) {
 			t.Errorf("unexpected outputError present: for %s, got %q", s.outstandingLoan, outputError)
 		}
-
 	}
 }
 

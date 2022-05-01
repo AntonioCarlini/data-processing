@@ -194,7 +194,7 @@ func convertTransactions(transactions [][]string) [][]string {
 		// func convertSingleTransaction(row) (string, string, string)
 		// produce three strings:
 		// output, ex2W, dep2Ex
-		_, _, _, _ = convertSingleTransaction(row)
+		_ = convertSingleTransaction(row, &output, &exchangeToWithdraw, &depositToExchange)
 
 		// So far, "Outstanding Loan" is *always* "$0.00", so check that immediately
 		if row[tx_OutstandingLoan] != "$0.00" {
@@ -617,18 +617,14 @@ func convertTransactions(transactions [][]string) [][]string {
 	return finalOutput
 }
 
-func convertSingleTransaction(row []string) (string, string, string, string) {
+func convertSingleTransaction(row []string, output *map[string][][]string, exchangeToWithdraw *[][]string, depositToExchnage *[][]string) string {
 	// produce three strings:
-	// output, ex2W, dep2Ex
-	output := ""
-	exchangeToWithdraw := ""
-	depositToExchange := ""
 	errorOutput := ""
 
 	if row[tx_OutstandingLoan] != "$0.00" {
 		errorOutput = fmt.Sprintf("TX %s: Outstanding Load error: %s\n", row[tx_ID], row[tx_OutstandingLoan])
 	}
-	return output, exchangeToWithdraw, depositToExchange, errorOutput
+	return errorOutput
 }
 
 func writeConvertedTransactions(filename string, data [][]string) {
