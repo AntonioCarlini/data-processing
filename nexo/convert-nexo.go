@@ -621,7 +621,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		}
 		// Nothing needs to be recorded for a deposit of fiat into NEXO
 	default:
-		errorOutput += fmt.Sprintf("Unhandled switch option:[%s]\n", row[1])
+		errorOutput += fmt.Sprintf("TX %s: Unhandled transaction type:[%s]\n", row[tx_ID], row[tx_Type])
 	}
 	return errorOutput
 }

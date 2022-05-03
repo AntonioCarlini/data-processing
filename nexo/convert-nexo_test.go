@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-const test_id = "tx-ID"
+const test_id = "9876-5432-10"
 const test_date = "2022-04-05 07:00:06"
 const test_type = "Interest"
 const test_input_currency = "NEXO"
@@ -18,6 +18,37 @@ const test_outstanding_loan = "$0.00"
 type OutsandingLoanTestData struct {
 	outstandingLoan     string
 	errorOutputExpected bool
+}
+
+// This test verifies that if a new transaction type appears, it will be flagged
+func TestUnknownTransactionType(t *testing.T) {
+	outputError := ""
+	output := make(map[string][][]string, 0)  // map of currency => array of strings
+	exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
+	depositToExchange := make([][]string, 0)  // FIFO queue or records
+
+	testName := "inject unknown transaction"
+	testRow := buildStandardTestVector()
+	testRow[tx_Type] = "An Unexpected Transaction"
+
+	// Start by testing a set of data that should be OK
+	outputError = convertSingleTransaction(testRow, &output, &exchangeToWithdraw, &depositToExchange)
+
+	// output, exch2Withdraw and dep2Exchange should always be empty
+	if len(output) != 0 {
+		t.Errorf("%s/%s: output not empty: got %q", testRow[tx_Type], testName, output)
+	}
+	if len(exchangeToWithdraw) != 0 {
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", testRow[tx_Type], testName, exchangeToWithdraw)
+	}
+	if len(depositToExchange) != 0 {
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", testRow[tx_Type], testName, depositToExchange)
+	}
+
+	// An error MUST be reported
+	if len(outputError) != 2 {
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
+	}
 }
 
 // This test verifies that an "Outstanding Loan" other than "$0.00" is rejected
