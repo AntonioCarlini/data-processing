@@ -495,7 +495,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 
 		// "Input Currency" will always be GBPX and "Output Currency" will always be GBP
 		if (row[tx_InputCurrency] != "GBPX") || (row[tx_OutputCurrency] != "GBP") {
-			errorOutput += fmt.Sprintf("TX %s: ExchangeToWithdraw does not use GBP [%s,%s]\n", row[tx_ID], row[tx_InputCurrency], row[tx_OutputCurrency])
+			errorOutput += fmt.Sprintf("TX %s: ExchangeToWithdraw does not use GBPX,GBP pair: [%s,%s]\n", row[tx_ID], row[tx_InputCurrency], row[tx_OutputCurrency])
 		}
 		// Input Amount and Output Amount must be identical in absolute value the former is negative and the latter is positive.
 		if row[tx_InputAmount][0] != '-' || row[tx_InputAmount][1:] != row[tx_OutputAmount] {
