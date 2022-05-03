@@ -525,7 +525,9 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		if row[tx_Details] != "approved / GBPX to GBP" {
 			errorOutput += fmt.Sprintf("TX %s: ExchangeToWithdraw details invalid [%s]\n", row[tx_ID], row[tx_Details])
 		}
-		*exchangeToWithdraw = append(*exchangeToWithdraw, row) // Add the record to the FIFO
+		// Make a seep copy of a slice using the technique suggested here: https://github.com/golang/go/wiki/SliceTricks
+		rowCopy := append(make([]string, 0, len(row)), row...)
+		*exchangeToWithdraw = append(*exchangeToWithdraw, rowCopy) // Add the record to the FIFO
 	case "WithdrawExchanged":
 		// WithdrawExchanged represents the second of two operations that are involved in removing funds from NEXO.
 		// This transaction records the actual withdrawal of GBP from NEXO.
@@ -583,7 +585,9 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		if row[tx_Details] != "approved / GBP Top Up" {
 			errorOutput += fmt.Sprintf("TX %s: DepositToExchange details invalid [%s]\n", row[tx_ID], row[tx_Details])
 		}
-		*depositToExchange = append(*depositToExchange, row) // Add the record to the FIFO
+		// Make a seep copy of a slice using the technique suggested here: https://github.com/golang/go/wiki/SliceTricks
+		rowCopy := append(make([]string, 0, len(row)), row...)
+		*depositToExchange = append(*depositToExchange, rowCopy) // Add the record to the FIFO
 	case "ExchangeDepositedOn":
 		// ExchangeDepositedOn represents the second of two operations that are involved in depositing funds on NEXO.
 		// This transaction records the actual deposit of GBP on NEXO.
