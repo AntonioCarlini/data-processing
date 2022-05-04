@@ -610,7 +610,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		if row[tx_Details] != "approved / GBP to GBPX" {
 			errorOutput += fmt.Sprintf("TX %s: ExchangeDepositedOn details invalid [%s]\n", row[tx_ID], row[tx_Details])
 		}
-		if len(*exchangeToWithdraw) <= 0 {
+		if len(*depositToExchange) <= 0 {
 			errorOutput += fmt.Sprintf("TX %s: WithdrawExchanged with no matching ExchangeDepositedOn\n", row[tx_ID])
 		} else {
 			matchingDepositToExchange := (*depositToExchange)[0] // Get the presumed matching record
