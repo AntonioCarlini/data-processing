@@ -653,6 +653,90 @@ func InterestTransaction(t *testing.T, pType string) {
 	}
 }
 
+// These tests verify that a "Exchange" is (broadly) handled correctly
+// The code here specifically uses the format that was current until sometime in April 2022.
+func TestExchangePreMay2022(t *testing.T) {
+	testName := ""
+	outputError := ""
+	output := make(map[string][][]string, 0)  // map of currency => array of strings
+	exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
+	depositToExchange := make([][]string, 0)  // FIFO queue or records
+
+	validTestRow := buildStandardTestVector()
+	validTestRow[tx_Type] = "Exchange"
+	validTestRow[tx_InputCurrency] = "GBPX/UST"
+	validTestRow[tx_InputAmount] = "UST 9.99"
+	validTestRow[tx_OutputCurrency] = "UST"
+	validTestRow[tx_OutputAmount] = "9.99"
+	validTestRow[tx_Details] = "approved / Exchange GBPX to TerraUSD"
+
+	// Start by testing a set of data that should be OK
+	testName = "valid GBP purchase"
+	outputError = convertSingleTransaction(validTestRow, &output, &exchangeToWithdraw, &depositToExchange)
+
+	// The output map should have one key (NEXO) and one entry under that key
+	if len(output) != 1 {
+		t.Errorf("%s/%s: output has wrong number of keys: %q", validTestRow[tx_Type], testName, output)
+	}
+
+	if len(output["UST"]) != 1 {
+		t.Errorf("%s/%s: output has missing [UST] data: %q", validTestRow[tx_Type], testName, output)
+	}
+
+	// output, exch2Withdraw and dep2Exchange should always be empty
+	if len(exchangeToWithdraw) != 0 {
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", validTestRow[tx_Type], testName, exchangeToWithdraw)
+	}
+	if len(depositToExchange) != 0 {
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", validTestRow[tx_Type], testName, depositToExchange)
+	}
+
+	// No error should be reported
+	if len(outputError) != 0 {
+		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+	}
+
+	// Check that a mismatched input/output amount is caught
+	testName = "valid swap"
+	testRow := make([]string, len(validTestRow))
+	copy(testRow, validTestRow)
+	testRow[tx_InputCurrency] = "NEXO/UST"
+	output = make(map[string][][]string, 0)
+
+	outputError = convertSingleTransaction(testRow, &output, &exchangeToWithdraw, &depositToExchange)
+
+	// output, exch2Withdraw and dep2Exchange should always be empty
+	if len(output) != 2 {
+		t.Errorf("%s/%s: output not valid: got %q", testRow[tx_Type], testName, output)
+	}
+
+	// There shoul be a SELL event for NEXO
+	if len(output["NEXO"]) != 1 {
+		t.Errorf("%s/%s: output has missing [NEXO] data: %q", testRow[tx_Type], testName, output)
+	} else if output["NEXO"][0][13] != "SELL" {
+		t.Errorf("%s/%s: output has wrong NEXO event (expected SELL): %q", testRow[tx_Type], testName, output)
+	}
+
+	// There shoul be a BUY event for UST
+	if len(output["UST"]) != 1 {
+		t.Errorf("%s/%s: output has missing [UST] data: %q", testRow[tx_Type], testName, output)
+	} else if output["UST"][0][13] != "BUY" {
+		t.Errorf("%s/%s: output has wrong UST event (expected BUY): %q", testRow[tx_Type], testName, output)
+	}
+
+	if len(exchangeToWithdraw) != 0 {
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", testRow[tx_Type], testName, exchangeToWithdraw)
+	}
+	if len(depositToExchange) != 0 {
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", testRow[tx_Type], testName, depositToExchange)
+	}
+
+	// No error should be reported
+	if len(outputError) != 0 {
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
+	}
+}
+
 func buildStandardTestVector() []string {
 	return []string{test_id, test_type, test_input_currency, test_input_amount, test_output_currency, test_output_amount, test_usd_equiv, test_detail, test_outstanding_loan, test_date}
 }
