@@ -69,7 +69,7 @@ func readTransactions(name string) [][]string {
 // At the end each cryptocurrency's data is gathered together in forward time order (crypto.com lists transactions in reverse time order).
 func convertTransactions(transactions [][]string) [][]string {
 	// The first element must match this exactly otherwise the format may have changed:
-	expectedFirstRow := []string{"Timestamp (UTC)", "Transaction Description", "Currency", "Amount", "To Currency", "To Amount", "Native Currency", "Native Amount", "Native Amount (in USD)", "Transaction Kind"}
+	expectedFirstRow := []string{"Timestamp (UTC)", "Transaction Description", "Currency", "Amount", "To Currency", "To Amount", "Native Currency", "Native Amount", "Native Amount (in USD)", "Transaction Kind", "Transaction Hash"}
 
 	firstRow := transactions[0]
 
@@ -198,6 +198,30 @@ func convertTransactions(transactions [][]string) [][]string {
 				entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT"}
 				output[currency] = append(output[currency], entry)
 			}
+		} else if strings.HasPrefix(description, "To +") {
+			// This is a transfer of a token to another crypto.com user
+
+			// Check the required values are as expected
+			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "crypto_transfer", "", "") {
+				fmt.Println("Bad value seen")
+				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT **BAD DATA**"}
+				output[currency] = append(output[currency], entry)
+			} else {
+				entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT-LOCAL"}
+				output[currency] = append(output[currency], entry)
+			}
+		} else if description == "Pay Rewards" {
+			// This is a transfer of a token to another crypto.com user
+
+			// Check the required values are as expected
+			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "transfer_cashback", "", "") {
+				fmt.Println("Bad value seen")
+				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "REWARD **BAD DATA**"}
+				output[currency] = append(output[currency], entry)
+			} else {
+				entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "REWARD"}
+				output[currency] = append(output[currency], entry)
+			}
 		} else {
 			fmt.Printf("UNRECOGNISED <%s>\n", description)
 			entry := []string{"***UNRECOGNISED***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "***INVALID***"}
@@ -288,11 +312,11 @@ func convertUtcToUKTime(utcTime string) string {
 	if err != nil {
 		fmt.Println(err)
 	}
-	nextBST := time.Date(2022, 3, 27, 1, 0, 0, 0, time.UTC)
-	if t.After(nextBST) {
-		t = t.Add(time.Hour * 1)
-		log.Fatalf("Adjust code to handle incursion into 2022 BST")
-	}
+	//	nextBST := time.Date(2022, 3, 27, 1, 0, 0, 0, time.UTC)
+	//	if t.After(nextBST) {
+	//		t = t.Add(time.Hour * 1)
+	//		log.Fatalf("Adjust code to handle incursion into 2022 BST")
+	//	}
 	result := t.Format(layout)
 	if err != nil {
 		fmt.Println(err)
