@@ -288,7 +288,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		}
 		//       Details: "approved / Transfer from Savings Wallet to Term Wallet"
 		if !strings.HasPrefix(row[tx_Details], "approved / Transfer from Savings Wallet to Term Wallet") {
-			errorOutput += fmt.Sprintf("TX %s: LockingTermDeposit Details error: input: %s\n", row[tx_ID], row[tx_Details])
+			errorOutput += fmt.Sprintf("TX %s: LockingTermDeposit Details error: input: [%s]\n", row[tx_ID], row[tx_Details])
 		}
 		if row[tx_UsdEquivalent][0] != '$' {
 			errorOutput += fmt.Sprintf("TX %s: LockingTermDeposit not in dollars [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
@@ -359,16 +359,25 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 	case "Deposit":
 		// "Deposit" transactions need to be recorded as "REWARD"
 
-		// Input/Output Currency must be NEXO
-		if (row[tx_InputCurrency] != "NEXO") || (row[tx_OutputCurrency] != "NEXO") {
+		allowedDepositCurrency := map[string]bool{
+			"NEXO":  true,
+			"LUNA2": true,
+		}
+
+		// Input/Output Currency must be BTC or USDT
+		if !allowedDepositCurrency[row[tx_InputCurrency]] {
 			errorOutput += fmt.Sprintf("TX %s: Deposit currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
 		}
+		if !allowedDepositCurrency[row[tx_OutputCurrency]] {
+			errorOutput += fmt.Sprintf("TX %s: Deposit currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
+		}
+
 		// Input Amount and Output Amount must be identical
 		if row[tx_InputAmount] != row[tx_OutputAmount] {
 			// TBD fmt.Printf("TX %s: Interest currency amount error: input: %s, output: %s\n", row[tx_ID], row[tx_InputAmount], row[tx_OutputAmount])
 		}
 		// Details: "approved / Nexonomics Exchange Cash-back Promotion"
-		if row[tx_Details] != "approved / Nexonomics Exchange Cash-back Promotion" {
+		if row[tx_Details] != "approved / Nexonomics Exchange Cash-back Promotion" && row[tx_Details] != "approved / LUNA2 Airdrop" {
 			errorOutput += fmt.Sprintf("TX %s: Deposit Details error: input: %s\n", row[tx_ID], row[tx_Details])
 		}
 		// Double check that the "USD equivalent" is stated in USD
@@ -382,17 +391,26 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "REWARD"}
 		(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
 	case "Exchange Cashback":
-		// Input/Output Currency must be BTC (because that is the only example so far)
-		if (row[tx_InputCurrency] != "BTC") || (row[tx_OutputCurrency] != "BTC") {
-			errorOutput += fmt.Sprintf("TX %s: Exchange currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
+		allowedExchangeCashbackCurrency := map[string]bool{
+			"BTC":  true,
+			"USDT": true,
 		}
+
+		// Input/Output Currency must be BTC or USDT
+		if !allowedExchangeCashbackCurrency[row[tx_InputCurrency]] {
+			errorOutput += fmt.Sprintf("TX %s: Exchange Cashback currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
+		}
+		if !allowedExchangeCashbackCurrency[row[tx_OutputCurrency]] {
+			errorOutput += fmt.Sprintf("TX %s: Exchange Cashback currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
+		}
+
 		// Input Amount and Output Amount must be identical
 		if row[tx_InputAmount] != row[tx_OutputAmount] {
-			errorOutput += fmt.Sprintf("TX %s: Exchange currency amount error: input: %s, output: %s\n", row[tx_ID], row[tx_InputAmount], row[tx_OutputAmount])
+			errorOutput += fmt.Sprintf("TX %s: Exchange Cashback currency amount error: input: %s, output: %s\n", row[tx_ID], row[tx_InputAmount], row[tx_OutputAmount])
 		}
 		// Details: "approved / 0.5% on top of your Exchange transaction"
 		if row[tx_Details] != "approved / 0.5% on top of your Exchange transaction" {
-			errorOutput += fmt.Sprintf("TX %s: Exchange Details error: input: %s\n", row[tx_ID], row[tx_Details])
+			errorOutput += fmt.Sprintf("TX %s: Exchange Cashback Details error: input: %s\n", row[tx_ID], row[tx_Details])
 		}
 		// Double check that the "USD equivalent" is stated in USD
 		if row[tx_UsdEquivalent][0] != '$' {
@@ -411,10 +429,12 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		// To avoid issues in transferring these values to a master spreadsheet, values that need to be examined are prefixed with "!!".
 
 		allowedExchangeCurrency := map[string]bool{
-			"BTC":  true,
-			"NEXO": true,
-			"USDC": true,
-			"UST":  true,
+			"BTC":   true,
+			"LUNA2": true,
+			"NEXO":  true,
+			"USDC":  true,
+			"USDT":  true,
+			"UST":   true,
 		}
 
 		startingToken := "INVALID-TOKEN-A"
@@ -585,7 +605,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		if row[tx_Details] != "approved / GBP Top Up" {
 			errorOutput += fmt.Sprintf("TX %s: DepositToExchange details invalid [%s]\n", row[tx_ID], row[tx_Details])
 		}
-		// Make a seep copy of a slice using the technique suggested here: https://github.com/golang/go/wiki/SliceTricks
+		// Make a keep copy of a slice using the technique suggested here: https://github.com/golang/go/wiki/SliceTricks
 		rowCopy := append(make([]string, 0, len(row)), row...)
 		*depositToExchange = append(*depositToExchange, rowCopy) // Add the record to the FIFO
 	case "ExchangeDepositedOn":
@@ -624,6 +644,30 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 			// between the times when the DepositToExchange and the ExchangeDepositedOn happen.
 		}
 		// Nothing needs to be recorded for a deposit of fiat into NEXO
+	case "Withdrawal":
+		// Withdrawal represents a transfer of a coin to another wallet.
+		allowedWithdrawalCurrency := map[string]bool{
+			"BTC": true,
+		}
+
+		// Input/Output Currency must be BTC
+		if !allowedWithdrawalCurrency[row[tx_InputCurrency]] {
+			errorOutput += fmt.Sprintf("TX %s: Withdrawal currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
+		}
+		if !allowedWithdrawalCurrency[row[tx_OutputCurrency]] {
+			errorOutput += fmt.Sprintf("TX %s: Withdrawal currency error: input: %s, output: %s\n", row[tx_ID], row[tx_InputCurrency], row[tx_InputCurrency])
+		}
+
+		if row[tx_UsdEquivalent][0] != '$' {
+			errorOutput += fmt.Sprintf("TX %s: Withdrawal dollar equivalent invalid [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
+		}
+		if !strings.HasPrefix(row[tx_Details], "approved / ") && !strings.HasPrefix(row[tx_Details], "processed / ") {
+			errorOutput += fmt.Sprintf("TX %s: Withdrawal details invalid [%s]\n", row[tx_ID], row[tx_Details])
+		}
+
+		// Record the TRANSFER-OUT of a coin
+		entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "TRANSFER-OUT"}
+		(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
 	default:
 		errorOutput += fmt.Sprintf("TX %s: Unhandled transaction type:[%s]\n", row[tx_ID], row[tx_Type])
 	}

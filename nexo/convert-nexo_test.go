@@ -141,18 +141,18 @@ func TestLockingTermDeposit(t *testing.T) {
 
 	// output, exch2Withdraw and dep2Exchange should always be empty
 	if len(output) != 0 {
-		t.Errorf("%s/%s: output not empty: got %q", validTestRow[tx_Type], testName, output)
+		t.Errorf("%s/%s: output not empty: got %q", testRow[tx_Type], testName, output)
 	}
 	if len(exchangeToWithdraw) != 0 {
-		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", validTestRow[tx_Type], testName, exchangeToWithdraw)
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", testRow[tx_Type], testName, exchangeToWithdraw)
 	}
 	if len(depositToExchange) != 0 {
-		t.Errorf("%s/%s: depositToExchange not empty: got %q", validTestRow[tx_Type], testName, depositToExchange)
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", testRow[tx_Type], testName, depositToExchange)
 	}
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: invalid error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: invalid error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -200,18 +200,18 @@ func TestUnlockingTermDeposit(t *testing.T) {
 
 	// output, exch2Withdraw and dep2Exchange should always be empty
 	if len(output) != 0 {
-		t.Errorf("%s/%s: output not empty: got %q", validTestRow[tx_Type], testName, output)
+		t.Errorf("%s/%s: output not empty: got %q", testRow[tx_Type], testName, output)
 	}
 	if len(exchangeToWithdraw) != 0 {
-		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", validTestRow[tx_Type], testName, exchangeToWithdraw)
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", testRow[tx_Type], testName, exchangeToWithdraw)
 	}
 	if len(depositToExchange) != 0 {
-		t.Errorf("%s/%s: depositToExchange not empty: got %q", validTestRow[tx_Type], testName, depositToExchange)
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", testRow[tx_Type], testName, depositToExchange)
 	}
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -265,13 +265,13 @@ func TestDeposit(t *testing.T) {
 
 	// output, exch2Withdraw and dep2Exchange should always be empty
 	if len(output) != 1 {
-		t.Errorf("%s/%s: output not empty: got %q", validTestRow[tx_Type], testName, output)
+		t.Errorf("%s/%s: output not empty: got %q", testRow[tx_Type], testName, output)
 	}
 	if len(exchangeToWithdraw) != 0 {
-		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", validTestRow[tx_Type], testName, exchangeToWithdraw)
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", testRow[tx_Type], testName, exchangeToWithdraw)
 	}
 	if len(depositToExchange) != 0 {
-		t.Errorf("%s/%s: depositToExchange not empty: got %q", validTestRow[tx_Type], testName, depositToExchange)
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", testRow[tx_Type], testName, depositToExchange)
 	}
 
 	// An error should be reported
@@ -335,7 +335,7 @@ func TestExchangeToWithdraw(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 
 	// Check that an Input Currency other than GBPX is caught
@@ -347,7 +347,7 @@ func TestExchangeToWithdraw(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 
 	// Check that an Output Currency other than GBP is caught
@@ -359,7 +359,7 @@ func TestExchangeToWithdraw(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -416,7 +416,7 @@ func TestWithdrawExchanged(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 
 	// Check that a mismatched output currency with ExchangeToWithdraw is caught
@@ -430,7 +430,7 @@ func TestWithdrawExchanged(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -488,7 +488,7 @@ func TestDepositToExchange(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 
 	// Check that an Input Currency other than GBP is caught
@@ -500,7 +500,7 @@ func TestDepositToExchange(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 
 	// Check that an Output Currency other than GBPX is caught
@@ -512,7 +512,7 @@ func TestDepositToExchange(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -572,7 +572,7 @@ func TestExchangeDepositedOn(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 
 	// Check that a mismatched output currency with ExchangeToWithdraw is caught
@@ -586,7 +586,7 @@ func TestExchangeDepositedOn(t *testing.T) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -649,7 +649,7 @@ func InterestTransaction(t *testing.T, pType string) {
 
 	// An error should be reported
 	if len(outputError) == 0 {
-		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
 	}
 }
 
@@ -734,6 +734,75 @@ func TestExchangePreMay2022(t *testing.T) {
 	// No error should be reported
 	if len(outputError) != 0 {
 		t.Errorf("%s/%s: unexpected error text: %q", testRow[tx_Type], testName, outputError)
+	}
+}
+
+// These tests verify that a "Withdrawal" is (broadly) handled correctly
+func TestWithdrawal(t *testing.T) {
+
+	testName := ""
+	outputError := ""
+	output := make(map[string][][]string, 0)  // map of currency => array of strings
+	exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
+	depositToExchange := make([][]string, 0)  // FIFO queue or records
+
+	validTestRow := buildStandardTestVector()
+	validTestRow[tx_Type] = "Withdrawal"
+	validTestRow[tx_InputAmount] = "9.99"
+	validTestRow[tx_OutputAmount] = "9.99"
+	validTestRow[tx_InputCurrency] = "BTC"
+	validTestRow[tx_OutputCurrency] = "BTC"
+	validTestRow[tx_Details] = "approved / any text"
+
+	// Start by testing a set of data that should be OK
+	testName = "valid data"
+	outputError = convertSingleTransaction(validTestRow, &output, &exchangeToWithdraw, &depositToExchange)
+
+	// The output map should have one key (BTC) and one entry under that key
+	if len(output) != 1 {
+		t.Errorf("%s/%s: output has wrong number of keys: %q", validTestRow[tx_Type], testName, output)
+	}
+
+	if len(output["BTC"]) != 1 {
+		t.Errorf("%s/%s: output has wrong [BTC] data: %q", validTestRow[tx_Type], testName, output)
+	}
+
+	// output, exch2Withdraw and dep2Exchange should always be empty
+	if len(exchangeToWithdraw) != 0 {
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", validTestRow[tx_Type], testName, exchangeToWithdraw)
+	}
+	if len(depositToExchange) != 0 {
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", validTestRow[tx_Type], testName, depositToExchange)
+	}
+
+	// No error should be reported
+	if len(outputError) != 0 {
+		t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
+	}
+
+	// Check that a mismatched input/output amount is caught
+	testName = "mismatched input/output amount"
+	testRow := make([]string, len(validTestRow))
+	copy(testRow, validTestRow)
+	testRow[tx_InputAmount] = "8.76"
+
+	outputError = convertSingleTransaction(testRow, &output, &exchangeToWithdraw, &depositToExchange)
+
+	// output, exch2Withdraw and dep2Exchange should always be empty
+	if len(output) != 1 {
+		t.Errorf("%s/%s: output not empty: got %q", testRow[tx_Type], testName, output)
+	}
+	if len(exchangeToWithdraw) != 0 {
+		t.Errorf("%s/%s: exchangeToWithdraw not empty: got %q", testRow[tx_Type], testName, exchangeToWithdraw)
+	}
+	if len(depositToExchange) != 0 {
+		t.Errorf("%s/%s: depositToExchange not empty: got %q", testRow[tx_Type], testName, depositToExchange)
+	}
+
+	// An error should be reported
+	if len(outputError) != 1 {
+		// Currently the code chooses not to report this issue
+		// TBD t.Errorf("%s/%s: unexpected error text: %q", validTestRow[tx_Type], testName, outputError)
 	}
 }
 
