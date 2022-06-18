@@ -207,7 +207,19 @@ func convertTransactions(transactions [][]string) [][]string {
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
-				entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT-LOCAL"}
+				entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT"}
+				output[currency] = append(output[currency], entry)
+			}
+		} else if strings.HasPrefix(description, "From +") {
+			// This is a transfer of a token to another crypto.com user
+
+			// Check the required values are as expected
+			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "crypto_transfer", "", "") {
+				fmt.Println("Bad value seen")
+				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-IN **BAD DATA**"}
+				output[currency] = append(output[currency], entry)
+			} else {
+				entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-IN"}
 				output[currency] = append(output[currency], entry)
 			}
 		} else if description == "Pay Rewards" {
