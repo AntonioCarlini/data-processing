@@ -391,6 +391,9 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "REWARD"}
 		(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
 	case "Exchange Cashback":
+		// "Exchange Cahsback" transactions need to be recorded as "REWARD".
+		// They represent a gift from the exchange for buying a coin.
+
 		allowedExchangeCashbackCurrency := map[string]bool{
 			"BTC":  true,
 			"USDT": true,
@@ -416,8 +419,12 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		if row[tx_UsdEquivalent][0] != '$' {
 			errorOutput += fmt.Sprintf("TX %s: Exchange not in dollars [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
 		}
-		// TBD
-		// Nothing yet recorded because I do not know how to record it!
+		// [3] is amount of nexo
+		// [6] is USD earned (but the "$" needs to be stripped)
+		// [9] is date/time in CET
+		// Output should be "nexo.io", date/time, uk date/time, nexo, (price), total, exch, £, "", "", "", "", "REWARD"
+		entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "REWARD"}
+		(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
 	case "Exchange":
 		// "Exchange" transactions represent a purchase and need to be recorded as "BUY" if the starting token is "GBPX".
 		// Otherwise this is a sale of tokenA for tokenB.
