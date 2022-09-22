@@ -279,14 +279,19 @@ func convertTransactions(transactions [][]string) [][]string {
 				delete(pendingWithdrawals, entry.refid)
 			}
 		case "transfer":
-			// TBD: ensure that this code checks everything that is documented
 			// "transfer" is used to move a cryptocurrency into a staking pool, so it never produces any output
 			// TODO subtype must be either "spottostaking" or "stakingfromspot"
 			// TOOD subtype "spottostaking" must be matched with a pending withdrawal
-			// TODO subtype "stakingfromspot" must be matched with a pending deposit
+			// TODO subtype "stakingfromspot" must be matched with a pending staking deposit
+			// TODO subtype "spotfromfutures" must be matched with a pending token deposit
 			// TODO txid must not be blank
 			// TODO balance must not be blank
 			// TODO: may be matched with a previous "withdrawal", in which case it represents an initial move into staking
+			//
+			// This code checks everything that is documented.
+			// In addition a transfer with subtype "spotfromfutures" (that requires a deposit with a matching refid) has been seen.
+			// This happened during the Ethereum Merge (moving from PoW to PoS) and shows in the online history as "EthereumPoW".
+			// It has been noted and checked, but no output is generated,
 			if entry.subtype == "spottostaking" {
 				// This entry (and the matching "withdrawal") represent a move of a cryptoasset to the staking pool
 				// No output row will be written. The matching "withdrawal" must be found, checked and removed from the pending withdrawals.
@@ -307,6 +312,12 @@ func convertTransactions(transactions [][]string) [][]string {
 				} else {
 					// TODO this is matched so it is OK
 					delete(pendingStakingDeposits, entry.refid)
+				}
+			} else if entry.subtype == "spotfromfutures" {
+				if _, found := pendingTokenDeposits[entry.refid]; !found {
+					fmt.Printf("transfer spotfromfutures with no matching deposit on row %d\n", entry.row)
+				} else {
+					delete(pendingTokenDeposits, entry.refid)
 				}
 			} else {
 				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
