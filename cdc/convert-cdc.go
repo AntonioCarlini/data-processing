@@ -98,7 +98,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			// This entry refers to a reward given for using someone's signup code or given when someone else uses your signup code.
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "USD", kind, "referral_gift", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (Sign-up Bonus Unlocked)")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", nativeAmount, "", "", "", "", "", "", "REWARD **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -109,13 +109,23 @@ func convertTransactions(transactions [][]string) [][]string {
 			// TODO this just indicates that crypto has been deposited into the Crypto Earn wallet.
 			// No entry is written.
 			// This must be before the code that checks for a suffix of "Deposit", otherwise the code will not interpret the row properly
+		} else if description == "Crypto Earn Withdrawal" {
+			// This is a withdrawal of a cryptocurrency from the Earn program.
+			// There are no tax implications, so verify the data but do nothing else.
+
+			// Check the required values are as expected
+			if !areRowValuesAcceptable(csvRowIndex, row, currency, currency, nativeCurrency, "GBP", kind, "crypto_earn_program_withdrawn", "", "") {
+				fmt.Println("Bad value seen (Crypto Earn Withdrawal)")
+				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "REWARD **BAD DATA**"}
+				output[currency] = append(output[currency], entry)
+			}
 		} else if strings.HasSuffix(description, " Deposit") {
 			// TODO check that the deposited token matches 'currency'
 			// This will result in a TRANSFER-IN entry
 			fields := strings.Fields(description)
 			depositCurrency := fields[0]
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, depositCurrency, nativeCurrency, "GBP", kind, "crypto_deposit", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (* Deposit)")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", nativeAmount, "", "", "", "", "", "", "TRANSFER-IN **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -123,25 +133,47 @@ func convertTransactions(transactions [][]string) [][]string {
 				output[currency] = append(output[currency], entry)
 			}
 		} else if strings.Contains(description, " -> ") {
-			// This entry represents a swap from currency or fiat to a cryptocurrency.
+			// This must be after the code that checks for "Crypto Earn Deposit", as this code will not interpret that row properly.
+			// If the trasaction kind is "viban_purchase", this entry represents a swap from currency or fiat to a cryptocurrency.
+			// If the trasaction kind is "crypto_exchange", this entry represents a swap from one cryptocurrency to another (e.g. USDC to BTC).
 			// Currently all such entries are from GBP to another currency and represent a simple purchase, so the checks are hard-coded to expect GBP.
-			// This must be after the code that checks for " Crypto Earn Deposit", as this code will not interpret that row properly
 			fields := strings.Fields(description)
 			convertFromCurrency := fields[0]
 			convertToCurrency := fields[2]
-			if !areRowValuesAcceptable(csvRowIndex, row, currency, "GBP", nativeCurrency, convertFromCurrency, kind, "viban_purchase", "", "") || (currency != convertFromCurrency) || (toCurrency != convertToCurrency) {
-				fmt.Println("Bad value seen")
+			if kind == "viban_purchase" {
+				if !areRowValuesAcceptable(csvRowIndex, row, currency, "GBP", nativeCurrency, convertFromCurrency, kind, "viban_purchase", "", "") || (currency != convertFromCurrency) || (toCurrency != convertToCurrency) {
+					fmt.Println("Bad value seen (-> exchange [viban_purchase])")
+					entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY **BAD DATA**"}
+					output[currency] = append(output[convertToCurrency], entry)
+				} else {
+					entry := []string{"", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY"}
+					output[convertToCurrency] = append(output[convertToCurrency], entry)
+				}
+			} else if kind == "crypto_exchange" {
+				if !areRowValuesAcceptable(csvRowIndex, row, currency, convertFromCurrency, nativeCurrency, "GBP", kind, "crypto_exchange", "", "") || (currency != convertFromCurrency) || (toCurrency != convertToCurrency) {
+					fmt.Println("Bad value seen (-> exchange [crypto_exchange])")
+					entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY **BAD DATA**"}
+					output[currency] = append(output[convertToCurrency], entry)
+				} else {
+					fmt.Printf("Debug: date: %s  %s (%s)->%s(%s)\n", ukTime, convertFromCurrency, amount, convertToCurrency, toAmount)
+					// This is a SELL of "amount" of "convertFromCurrency" ...
+					entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "SELL"}
+					output[convertFromCurrency] = append(output[convertFromCurrency], entry)
+					// ... followed by a BUY of "toAmount" of "convertToCurrency"
+					entry = []string{"", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY"}
+					output[convertToCurrency] = append(output[convertToCurrency], entry)
+				}
+			} else {
+				fmt.Println("Bad value seen (-> exchange [UNKNOWN])")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY **BAD DATA**"}
 				output[currency] = append(output[convertToCurrency], entry)
-			} else {
-				entry := []string{"", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY"}
-				output[convertToCurrency] = append(output[convertToCurrency], entry)
+
 			}
 		} else if description == "CRO Stake Rewards" {
 			// crypto.com lists CRO staking rewards in a special way. This entry represnts a staking reward given on the CRO that has been staked for the VISA pre-paid card.
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "mco_stake_reward", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (CRO Stake Rewards)")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "STAKING **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -153,7 +185,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			// No entry is written: this code is here just to check that the data is as expected.
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "lockup_lock", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (CRO Stake)")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CRO STAKE **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			}
@@ -161,7 +193,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			// This entry represents CRO paid as cashback for purchases made on the VISA card.
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "referral_card_cashback", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (Card Cashback)")
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CASHBACK **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -177,7 +209,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			// This entry represents a VISA card cashback that has been reversed.
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "card_cashback_reverted", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (Card Cashback Reversal)")
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CASHBACK-REVERSAL **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -191,7 +223,7 @@ func convertTransactions(transactions [][]string) [][]string {
 
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, withdrawCurrency, nativeCurrency, "GBP", kind, "crypto_withdrawal", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (Withdraw *)")
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -203,7 +235,7 @@ func convertTransactions(transactions [][]string) [][]string {
 
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "crypto_transfer", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (To +)")
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-OUT **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -215,7 +247,7 @@ func convertTransactions(transactions [][]string) [][]string {
 
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "crypto_transfer", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (From +)")
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "TRANSFER-IN **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -227,7 +259,7 @@ func convertTransactions(transactions [][]string) [][]string {
 
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "transfer_cashback", "", "") {
-				fmt.Println("Bad value seen")
+				fmt.Println("Bad value seen (Pay Rewards)")
 				entry := []string{"***BAD DATA***", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "REWARD **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
