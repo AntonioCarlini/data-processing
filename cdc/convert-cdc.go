@@ -189,6 +189,15 @@ func convertTransactions(transactions [][]string) [][]string {
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CRO STAKE **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			}
+		} else if description == "CRO Unstake" {
+			// This entry indicates that CRO has been unstaked (rather than removed from the Crypto Earn programme)
+			// No entry is written: this code is here just to check that the data is as expected.
+			// Check the required values are as expected
+			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "lockup_unlock", "", "") {
+				fmt.Println("Bad value seen (CRO Unstake)")
+				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CRO UNSTAKE **BAD DATA**"}
+				output[currency] = append(output[currency], entry)
+			}
 		} else if description == "Card Cashback" {
 			// This entry represents CRO paid as cashback for purchases made on the VISA card.
 			// Check the required values are as expected
