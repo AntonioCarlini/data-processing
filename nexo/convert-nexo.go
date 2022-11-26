@@ -485,6 +485,10 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 			errorOutput += fmt.Sprintf("TX %s: Exchange Input Currency format error: %s\n", row[tx_ID], row[tx_InputCurrency])
 		}
 
+		if amountStartingToken[0:1] != "-" {
+			errorOutput += fmt.Sprintf("TX %s: Exchange input amount error: expected -ve amount but found: %s\n", row[tx_ID], amountStartingToken)
+		}
+
 		// Double check that the "USD equivalent" is stated in USD
 		if row[tx_UsdEquivalent][0] != '$' {
 			errorOutput += fmt.Sprintf("TX %s: Deposit not in dollars [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
@@ -499,7 +503,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 			if !allowedExchangeCurrency[startingToken] {
 				errorOutput += fmt.Sprintf("TX %s: Exchange starting currency error: %s\n", row[tx_ID], row[tx_OutputCurrency])
 			}
-			notes := "Exchanged " + startingToken + " for " + endingToken
+			notes := "Exchanged " + amountStartingToken[1:] + " " + startingToken + " -> " + amountEndingToken + " " + endingToken + " ($" + amountUSD + ")"
 			// This is a SELL of the startingToken ...
 			entry := []string{"", "nexo.io", row[tx_DateTime], "", amountStartingToken, "", amountUSD, "", "", "", "", "", "", "SELL", "", "", "", "", "", "", "", "", "", "", notes}
 			(*output)[startingToken] = append((*output)[startingToken], entry)

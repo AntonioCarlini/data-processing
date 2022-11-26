@@ -150,17 +150,23 @@ func convertTransactions(transactions [][]string) [][]string {
 					output[convertToCurrency] = append(output[convertToCurrency], entry)
 				}
 			} else if kind == "crypto_exchange" {
-				if !areRowValuesAcceptable(csvRowIndex, row, currency, convertFromCurrency, nativeCurrency, "GBP", kind, "crypto_exchange", "", "") || (currency != convertFromCurrency) || (toCurrency != convertToCurrency) {
+				if !areRowValuesAcceptable(csvRowIndex, row, currency, convertFromCurrency, nativeCurrency, "GBP", kind, "crypto_exchange", "", "") ||
+					(currency != convertFromCurrency) || (toCurrency != convertToCurrency) || (amount[0:1] != "-") {
 					fmt.Println("Bad value seen (-> exchange [crypto_exchange])")
 					entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY **BAD DATA**"}
 					output[currency] = append(output[convertToCurrency], entry)
 				} else {
 					fmt.Printf("Debug: date: %s  %s (%s)->%s(%s)\n", ukTime, convertFromCurrency, amount, convertToCurrency, toAmount)
-					// This is a SELL of "amount" of "convertFromCurrency" ...
-					entry := []string{"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "SELL"}
+					// This is a SELL of "amount" of "convertFromCurrency" (note that "amount" must be a negative number)...
+					notes := fmt.Sprintf("Exchange %s %s -> %s %s (£%s)", amount[1:], convertFromCurrency, toAmount, convertToCurrency, toAmount)
+					entry := []string{
+						"", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "SELL",
+						"", "", "", "", "", "", "", "", "", notes}
 					output[convertFromCurrency] = append(output[convertFromCurrency], entry)
 					// ... followed by a BUY of "toAmount" of "convertToCurrency"
-					entry = []string{"", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY"}
+					entry = []string{
+						"", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY",
+						"", "", "", "", "", "", "", "", "", notes}
 					output[convertToCurrency] = append(output[convertToCurrency], entry)
 				}
 			} else {
