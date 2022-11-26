@@ -69,6 +69,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	coingecko "github.com/superoo7/go-gecko/v3"
 )
 
 //
@@ -86,15 +88,27 @@ type ledger struct {
 	balance string
 }
 
+var historicalPriceCache = map[string]string{}
+var historicalPriceCacheUpdated bool = false
+
 // Open the input file, convert it to the output format and write it out in CSV format
 func main() {
 
+	cliHpcFilename := flag.String("cache", "", "File that contains the historical price data (CSV)")
 	flag.Parse()
+
+	home := os.Getenv("HOME")
+	hpcFilename := home + "/.config/coin-prices/cg-price-cache.csv"
+	if *cliHpcFilename != "" {
+		hpcFilename = *cliHpcFilename
+	}
 
 	inputs := flag.Args()
 	if len(inputs) != 2 {
 		log.Fatalf("Exactly 2 arguments required but %d supplied\n", len(inputs))
 	}
+
+	loadHistoricalPriceCache(hpcFilename)
 
 	transactionsFilename := flag.Arg(0)
 	outputFile := flag.Arg(1)
@@ -104,6 +118,8 @@ func main() {
 	convertedTransactions := convertTransactions(transactions)
 
 	writeConvertedTransactions(outputFile, convertedTransactions)
+
+	storeHistoricalPriceCache(hpcFilename)
 }
 
 func readTransactions(name string) [][]string {
@@ -273,7 +289,7 @@ func convertTransactions(transactions [][]string) [][]string {
 					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-OUT"}
 					output[entry.asset] = append(output[entry.asset], data)
 				} else {
-					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
+					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-OUT **BAD DATA**"}
 					output[entry.asset] = append(output[entry.asset], data)
 				}
 				delete(pendingWithdrawals, entry.refid)
@@ -345,7 +361,8 @@ func convertTransactions(transactions [][]string) [][]string {
 				fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
 			}
 			if valid {
-				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING"}
+				tokenValue := LookupHistoricalTokenValue(stakedCurrency, entry.time)
+				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenValue, "", "", "", "", "", "", "", "STAKING"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
 			} else {
 				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
@@ -581,4 +598,151 @@ func isFiatCurrency(currency string) bool {
 	}
 	_, found := acceptedFiatCurrencies[currency]
 	return found
+}
+
+// var cg *coingecko.Client = 0
+var cg *coingecko.Client = coingecko.NewClient(nil)
+
+var token2cgToken = map[string]string{
+	"ADA":   "cardano",
+	"AVAX":  "avalanche-2",
+	"AXS":   "axie-infinity",
+	"BNB":   "bnb",
+	"BSGG":  "betswap-gg",
+	"BTC":   "bitcoin",
+	"CRO":   "crypto-com-chain",
+	"DOGE":  "dogecoin",
+	"DOT":   "polkadot",
+	"ENJ":   "enjincoin",
+	"ETH":   "ethereum",
+	"FLOW":  "flow",
+	"FWT":   "freeway",
+	"GOHM":  "governance-ohm",
+	"MANA":  "decentraland",
+	"MATIC": "matic-network",
+	"NEXO":  "nexo",
+	"SAND":  "the-sandbox",
+	"SOL":   "solana",
+	"TIME":  "wonderland",
+	"WMEMO": "wrapped-memory",
+}
+
+// "WSOHM"  : NOT NEEDED
+// "OHM" (in $)  - NOT FOUND
+// "UST" NOT NEEDED
+
+// Lookup historical price for a token on a specified day
+//
+// requestedToken: the token for which a price needs to be found (9)e.g. FLOW)
+// dateTime:       the time of the token price in YYYY-MM-DD HH:MM:SS format
+//
+// Prices are looked up on Coingecko, which has a rate limit of about 10/minute
+// so a rather excessive 8s delay is imposed to try to avoid hitting this limit.
+
+var current_lookup int = 0
+
+func LookupHistoricalTokenValue(requestedToken string, dateTime string) string {
+	// Verify the date is valid and turn into the format coingecko wants (DD-MM-YY HH:MM:SS)
+	date, err := time.Parse("2006-01-02 15:04:05", dateTime)
+	if err != nil {
+		fmt.Printf("Invalid date (%s) when looking up token %s: %s\n", dateTime, requestedToken, err)
+		return "CG-LOOKUP: INVALID DATE"
+	}
+	cgDate := date.Format("02-01-2006 15:04:05")
+
+	// Convert from the token to the string used by coingecko for that token
+	lookupToken, found := token2cgToken[requestedToken]
+	if !found {
+		return "CG-LOOKUP INVALID TOKEN"
+	}
+
+	// Lookup the value in the cache
+	index := lookupToken + "@" + cgDate
+	if val, found := historicalPriceCache[index]; found {
+		return val
+	}
+
+	// Limit the number of lookups for now ...
+	if current_lookup > 20 {
+		return requestedToken
+	}
+
+	// The free coingecko service has a rate limit on the API, so try to avoid hitting that
+	time.Sleep(8 * time.Second)
+	details, err := cg.CoinsIDHistory(lookupToken, cgDate, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	val := fmt.Sprintf("%f", details.MarketData.CurrentPrice["usd"])
+	// fmt.Printf("looked up [%12s] (was %12s) at [%s] from [%s] = %s\n", lookupToken, requestedToken, cgDate, dateTime, val)
+	historicalPriceCache[index] = val
+	historicalPriceCacheUpdated = true
+	current_lookup += 1
+	return fmt.Sprintf("%f", val)
+}
+
+// Price Cache stores: coingecko-token-name, date-time, price
+func loadHistoricalPriceCache(filename string) {
+	f, err := os.Open(filename)
+	if err != nil {
+		fmt.Printf("Cannot open price-cache'%s': %s\n", filename, err.Error())
+		return
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+
+	priceHistoryData, err := r.ReadAll()
+	if err != nil {
+		log.Fatalln("Cannot read CSV data:", err.Error())
+	}
+
+	// Loop through the CSV data building up a map of "coin@datetime" => value
+	for _, row := range priceHistoryData {
+		index := row[0] + "@" + row[1]
+		if val, found := historicalPriceCache[index]; found {
+			log.Fatalf("historical data repeated for %s (was %s, now %s)\n", index, val, row[2])
+		}
+		historicalPriceCache[index] = row[2]
+	}
+
+	return
+}
+
+func storeHistoricalPriceCache(filename string) {
+	var csvData [][]string
+
+	if !historicalPriceCacheUpdated {
+		return
+	}
+
+	// Build the map keys in alpha order
+	keys := make([]string, 0)
+	for k, _ := range historicalPriceCache {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Turn the cache into data suitable for CSV
+	for _, k := range keys {
+		parts := strings.Split(k, "@")
+		data := []string{parts[0], parts[1], historicalPriceCache[k]}
+		csvData = append(csvData, data)
+	}
+
+	// Open the output file and write out the data
+	f, err := os.Create(filename)
+	if err != nil {
+		log.Fatalf("Cannot create '%s': %s\n", filename, err.Error())
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	err = w.WriteAll(csvData)
+	if err != nil {
+		log.Fatalln("Cannot write CSV data:", err.Error())
+	}
+
+	fmt.Printf("Historical price cache updated: %s\n", filename)
+	return
 }
