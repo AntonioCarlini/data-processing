@@ -156,7 +156,6 @@ func convertTransactions(transactions [][]string) [][]string {
 					entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, toAmount, "", "", "", nativeAmount, "", "", "", "", "BUY **BAD DATA**"}
 					output[currency] = append(output[convertToCurrency], entry)
 				} else {
-					fmt.Printf("Debug: date: %s  %s (%s)->%s(%s)\n", ukTime, convertFromCurrency, amount, convertToCurrency, toAmount)
 					// This is a SELL of "amount" of "convertFromCurrency" (note that "amount" must be a negative number)...
 					notes := fmt.Sprintf("Exchange %s %s -> %s %s (£%s)", amount[1:], convertFromCurrency, toAmount, convertToCurrency, toAmount)
 					entry := []string{
@@ -175,11 +174,12 @@ func convertTransactions(transactions [][]string) [][]string {
 				output[currency] = append(output[convertToCurrency], entry)
 
 			}
-		} else if description == "CRO Stake Rewards" {
-			// crypto.com lists CRO staking rewards in a special way. This entry represnts a staking reward given on the CRO that has been staked for the VISA pre-paid card.
+		} else if (description == "CRO Stake Rewards") || (description == "CRO Lockup Rewards") {
+			// crypto.com lists CRO staking rewards in a special way. This entry represents a staking reward given on the CRO that has been staked for the VISA pre-paid card.
+			// Note that the 2023-04 data dump lists this item as "CRO Lockup Rewards" rather than "CRO Stake Rewards", but otherwise seems identical.
 			// Check the required values are as expected
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "mco_stake_reward", "", "") {
-				fmt.Println("Bad value seen (CRO Stake Rewards)")
+				fmt.Println("Bad value seen (CRO Stake/Lockup Rewards)")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "STAKING **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			} else {
@@ -202,6 +202,15 @@ func convertTransactions(transactions [][]string) [][]string {
 			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "lockup_unlock", "", "") {
 				fmt.Println("Bad value seen (CRO Unstake)")
 				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CRO UNSTAKE **BAD DATA**"}
+				output[currency] = append(output[currency], entry)
+			}
+		} else if description == "CRO Unlock" {
+			// This entry indicates that CRO that had been locked up has now unlocked.
+			// No entry is written: this code is here just to check that the data is as expected.
+			// Check the required values are as expected
+			if !areRowValuesAcceptable(csvRowIndex, row, currency, "CRO", nativeCurrency, "GBP", kind, "lockup_unlock", "", "") {
+				fmt.Println("Bad value seen (CRO Unlock)")
+				entry := []string{"**BAD DATA**", "crypto.com App", exchangeTime, ukTime, amount, "", "", "", nativeAmount, "", "", "", "", "CRO STAKE **BAD DATA**"}
 				output[currency] = append(output[currency], entry)
 			}
 		} else if description == "Card Cashback" {
@@ -338,8 +347,8 @@ func writeConvertedTransactions(filename string, data [][]string) {
 
 // Checks that two slices are identical.
 // Checks that:
-//  * the number of elements is identical
-//  * the corresponding elements match exactly
+//   - the number of elements is identical
+//   - the corresponding elements match exactly
 func testSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		fmt.Printf("slice diff len: len-a %d len-b: %d\n", len(a), len(b))
