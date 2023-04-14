@@ -22,7 +22,7 @@ package main
 // Output Amount:
 // USD Equivalent: USD ($) amount (presumably at the time)
 // Details: always starts with "approved/"
-// Outstanding Loan: always "$0.00"
+// Outstanding Loan: always "$0.00" [Removed sometime between 2022-APR and 2023-APR; no longer supported]
 // Date / Time: YYYY-MM-DD HH:MM:SS
 //
 // Transaction Type:
@@ -104,7 +104,7 @@ func main() {
 	}
 
 	// The first element must match this exactly otherwise the format may have changed:
-	expectedFirstRow := []string{"Transaction", "Type", "Input Currency", "Input Amount", "Output Currency", "Output Amount", "USD Equivalent", "Details", "Outstanding Loan", "Date / Time"}
+	expectedFirstRow := []string{"Transaction", "Type", "Input Currency", "Input Amount", "Output Currency", "Output Amount", "USD Equivalent", "Details", "Date / Time"}
 	firstRow := transactions[0]
 	if !testSlicesEqual(firstRow, expectedFirstRow) {
 		fmt.Printf("Expected first row format: %s\n", expectedFirstRow)
@@ -163,16 +163,15 @@ func readTransactions(name string) [][]string {
 // row[tx_OutstandingLoan] : Outstanding Loan
 // row[tx_DateTime] : Date / Time
 const ( // iota is reset to 0
-	tx_ID              = 0 // transaction ID
-	tx_Type            = 1 //
-	tx_InputCurrency   = 2 //
-	tx_InputAmount     = 3 //
-	tx_OutputCurrency  = 4 //
-	tx_OutputAmount    = 5 //
-	tx_UsdEquivalent   = 6 //
-	tx_Details         = 7 //
-	tx_OutstandingLoan = 8 //
-	tx_DateTime        = 9 //
+	tx_ID             = 0 // transaction ID
+	tx_Type           = 1 //
+	tx_InputCurrency  = 2 //
+	tx_InputAmount    = 3 //
+	tx_OutputCurrency = 4 //
+	tx_OutputAmount   = 5 //
+	tx_UsdEquivalent  = 6 //
+	tx_Details        = 7 //
+	tx_DateTime       = 8 //
 )
 
 func convertTransactions(transactions [][]string) [][]string {
@@ -251,11 +250,6 @@ func convertTransactions(transactions [][]string) [][]string {
 func convertSingleTransaction(row []string, output *map[string][][]string, exchangeToWithdraw *[][]string, depositToExchange *[][]string) string {
 
 	errorOutput := ""
-
-	// So far, "Outstanding Loan" is *always* "$0.00", so check that immediately
-	if row[tx_OutstandingLoan] != "$0.00" {
-		errorOutput += fmt.Sprintf("TX %s: Outstanding Load error: %s\n", row[tx_ID], row[tx_OutstandingLoan])
-	}
 
 	// Handle each transaction Type separately
 	switch row[tx_Type] { // row[1] is the "Type"
@@ -475,7 +469,6 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 				errorOutput += fmt.Sprintf("TX %s: Exchange input amount error: expected: %s, actual: %s\n", row[tx_ID], expectedInputAmount, row[tx_InputAmount])
 			}
 		} else if len(tokens) == 1 {
-			fmt.Println("New format (post middle 2022-APR)")
 			startingToken = row[tx_InputCurrency]
 			endingToken = row[tx_OutputCurrency]
 			amountStartingToken = row[tx_InputAmount]
@@ -705,8 +698,8 @@ func writeConvertedTransactions(filename string, data [][]string) {
 
 // Checks that two slices are identical.
 // Checks that:
-//  * the number of elements is identical
-//  * the corresponding elements match exactly
+//   - the number of elements is identical
+//   - the corresponding elements match exactly
 func testSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		fmt.Printf("slice diff len: len-a %d len-b: %d\n", len(a), len(b))
