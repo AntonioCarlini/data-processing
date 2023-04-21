@@ -73,7 +73,6 @@ import (
 	coingecko "github.com/superoo7/go-gecko/v3"
 )
 
-//
 type ledger struct {
 	row     int
 	txid    string
@@ -157,6 +156,16 @@ func convertTransactions(transactions [][]string) [][]string {
 	pendingWithdrawals := make(map[string]ledger)
 	pendingStakingDeposits := make(map[string]ledger)
 	pendingTokenDeposits := make(map[string]ledger)
+
+	// Coin values are found by asking CoinGecko for historical market data: a single API call can return N days worth of data.
+	// Calculate how far back to go by finding the oldest entry in the transaction data - which happens to be the first record as it is
+	// presented in forward data order - and add a margin of 10 days for safety.
+
+	oldest_date, _ := time.Parse("2006-01-02 15:04:05", transactions[1][2])
+	today := time.Now()
+	days_ago := int(today.Sub(oldest_date).Hours()/24) + 10 // Add 10 to be sure that all data for necessary dates are available
+	// fmt.Println("Oldest date/time: ", oldest_date, " now: ", today, " days-between", days_ago)
+	SetDaysOfPriceHistoryToRequest(days_ago)
 
 	for i, row := range transactions[1:] {
 		csvRowIndex := i + 2
@@ -361,7 +370,11 @@ func convertTransactions(transactions [][]string) [][]string {
 				fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
 			}
 			if valid {
-				tokenValue := LookupHistoricalTokenValue(stakedCurrency, entry.time)
+				tokenValueFloat32, err := LookupHistoricalTokenValueInBulk(stakedCurrency, entry.time, false)
+				if err != nil {
+					log.Fatal(err)
+				}
+				tokenValue := fmt.Sprintf("%f", tokenValueFloat32)
 				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenValue, "", "", "", "", "", "", "", "STAKING"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
 			} else {
@@ -478,8 +491,8 @@ func writeConvertedTransactions(filename string, data [][]string) {
 
 // Checks that two slices are identical.
 // Checks that:
-//  * the number of elements is identical
-//  * the corresponding elements match exactly
+//   - the number of elements is identical
+//   - the corresponding elements match exactly
 func testSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		fmt.Printf("slice diff len: len-a %d len-b: %d\n", len(a), len(b))
@@ -603,37 +616,13 @@ func isFiatCurrency(currency string) bool {
 // var cg *coingecko.Client = 0
 var cg *coingecko.Client = coingecko.NewClient(nil)
 
-var token2cgToken = map[string]string{
-	"ADA":   "cardano",
-	"AVAX":  "avalanche-2",
-	"AXS":   "axie-infinity",
-	"BNB":   "bnb",
-	"BSGG":  "betswap-gg",
-	"BTC":   "bitcoin",
-	"CRO":   "crypto-com-chain",
-	"DOGE":  "dogecoin",
-	"DOT":   "polkadot",
-	"ENJ":   "enjincoin",
-	"ETH":   "ethereum",
-	"FLOW":  "flow",
-	"FWT":   "freeway",
-	"GOHM":  "governance-ohm",
-	"MANA":  "decentraland",
-	"MATIC": "matic-network",
-	"NEXO":  "nexo",
-	"SAND":  "the-sandbox",
-	"SOL":   "solana",
-	"TIME":  "wonderland",
-	"WMEMO": "wrapped-memory",
-}
-
 // "WSOHM"  : NOT NEEDED
 // "OHM" (in $)  - NOT FOUND
 // "UST" NOT NEEDED
 
 // Lookup historical price for a token on a specified day
 //
-// requestedToken: the token for which a price needs to be found (9)e.g. FLOW)
+// requestedToken: the token for which a price needs to be found (e.g. FLOW)
 // dateTime:       the time of the token price in YYYY-MM-DD HH:MM:SS format
 //
 // Prices are looked up on Coingecko, which has a rate limit of about 10/minute
@@ -651,7 +640,7 @@ func LookupHistoricalTokenValue(requestedToken string, dateTime string) string {
 	cgDate := date.Format("02-01-2006 15:04:05")
 
 	// Convert from the token to the string used by coingecko for that token
-	lookupToken, found := token2cgToken[requestedToken]
+	lookupToken, found := ConvertCoinSymbolToCoingeckoCoinName(requestedToken)
 	if !found {
 		return "CG-LOOKUP INVALID TOKEN"
 	}
@@ -669,6 +658,7 @@ func LookupHistoricalTokenValue(requestedToken string, dateTime string) string {
 
 	// The free coingecko service has a rate limit on the API, so try to avoid hitting that
 	time.Sleep(8 * time.Second)
+	fmt.Printf("looking up: %q  date: %q\n", lookupToken, cgDate)
 	details, err := cg.CoinsIDHistory(lookupToken, cgDate, true)
 	if err != nil {
 		log.Fatal(err)
@@ -679,7 +669,7 @@ func LookupHistoricalTokenValue(requestedToken string, dateTime string) string {
 	historicalPriceCache[index] = val
 	historicalPriceCacheUpdated = true
 	current_lookup += 1
-	return fmt.Sprintf("%f", val)
+	return fmt.Sprintf("%s", val) // TODO was %f ... why?
 }
 
 // Price Cache stores: coingecko-token-name, date-time, price
