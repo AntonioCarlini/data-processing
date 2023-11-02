@@ -344,6 +344,21 @@ func convertTransactions(transactions [][]string) [][]string {
 				} else {
 					delete(pendingTokenDeposits, entry.refid)
 				}
+			} else if entry.subtype == "stakingtospot" {
+				// This seems to represent a withdrawl from staking
+				// TODO this should match a withdrawl and should involve a .S currency
+				valid := true
+				var withdrawal ledger
+				withdrawal, valid = pendingWithdrawals[entry.refid]
+				if !valid {
+					fmt.Printf("transfer (stakingtospot) on row %d has no matching withdrawal\n", entry.row)
+				} else if (entry.amount != withdrawal.amount) || (entry.fee != withdrawal.fee) || (entry.asset != withdrawal.asset) {
+					fmt.Printf("transfer (stakingtospot) on row %d does not properly match withdrawal on row %d\n", entry.row, withdrawal.row)
+				}
+				delete(pendingWithdrawals, entry.refid)
+			} else if entry.subtype == "spotfromstaking" {
+				// This seems to represent a withdrawl from staking
+				// TODO should match a deposit, but there is no check for that yet
 			} else {
 				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
 			}
