@@ -89,6 +89,15 @@ def main():
     coin_1_dates = [data[0] for data in coin_1_data['prices']]
     coin_2_dates = [data[0] for data in coin_2_data['prices']]
 
+    if args.debug:
+        print("api return:    ", coin_1_data)
+        print()
+        print()
+        print("api return prices: ", coin_1_data['prices'])
+        print()
+        print()
+        print("coin_1_dates:  ", coin_1_dates)
+
     # convert unix timestamp to datetime
     coin_1_dates = [
         datetime.datetime.fromtimestamp(date/1000)
@@ -102,6 +111,16 @@ def main():
     coin_1_prices = [data[1] for data in coin_1_data['prices']]
     coin_2_prices = [data[1] for data in coin_2_data['prices']]
 
+    if args.debug:
+        print("coin_1_dates (date/time):  ")
+        for date in coin_1_dates:
+            print(date)
+            print()
+            print()
+            print("coin_1_prices:  ", coin_1_prices)
+            print()
+            print()
+            print("API keys: ", list(coin_1_data))
 
     # Plot the data
     plt.figure(figsize=(20,10))
