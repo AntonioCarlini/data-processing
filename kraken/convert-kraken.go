@@ -262,13 +262,24 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 				if spend.txid == "" || spend.subtype != "" || spend.balance == "" {
 					fmt.Printf("Saw 'spend' with missing fields in row %d\n", entry.row)
+					valid = false
 				}
-				// TODO handle a non-GBP spend; for now just flag it
-				if spend.asset != "ZGBP" {
+				// Handle a non-GBP spend; for now only FLOW is handled
+				// TODO: Note that entry.asset may well be XXBT instead of BTC; leave that for now
+				note := fmt.Sprintf("SELL %s %s to buy %s %s", strings.TrimLeft(spend.amount, "-"), spend.asset, entry.amount, entry.asset)
+				if spend.asset == "FLOW" {
+					// TODO here sell FLOW amount will be -ve to show a spend; there will be a matching refid to show the currency purchased
+					ukSpendTime := convertKrakenTimeToUKTime(spend.time)
+					data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", "", "", "", "", "", "", "", "SELL", "O", "", "", "", "", "T", "U", "V", "W", note}
+					output[spend.asset] = append(output[spend.asset], data)
+					// The spend in fiat currency is not known, so both the SELL and BUY will have to be calculated manually
+					totalSpend = ""
+				} else if spend.asset != "ZGBP" {
 					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", spend.asset, spend.row)
+					valid = false
 				}
 				if valid {
-					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY"}
+					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", note}
 					output[entry.asset] = append(output[entry.asset], data)
 				} else {
 					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY **BAD DATA**"}
