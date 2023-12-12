@@ -254,6 +254,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 	// Handle each transaction Type separately
 	switch row[tx_Type] { // row[1] is the "Type"
 	case "LockingTermDeposit":
+	case "Locking Term Deposit":
 		// LockingTermDeposit represents moving a token from the normal wallet into a wallet where it earns higher STAKING rewards in return for being locked.
 		// This line generates no output and is checked purely to ensure that the format is understood and has not changed.
 		// Input/Output Currency must be identical
@@ -288,6 +289,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 			errorOutput += fmt.Sprintf("TX %s: LockingTermDeposit not in dollars [%s]\n", row[tx_ID], row[tx_UsdEquivalent])
 		}
 	case "UnlockingTermDeposit":
+	case "Unlocking Term Deposit":
 		// UnlockingTermDeposit represents moving a token from the long term wallet into a normal wallet at the end of a term period.
 		// This line generates no output and is checked purely to ensure that the format is understood and has not changed.
 		// Input/Output Currency must be identical
@@ -323,6 +325,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		}
 
 	case "FixedTermInterest":
+	case "Fixed Term Interest":
 		// "FixedTermInterest" is a staking reward that happens in a "Long Term Wallet".
 		// This is handled almost identically to "Interest".
 		fallthrough
@@ -511,6 +514,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		//// output = append(output, entry)
 		//// fmt.Printf("NOT outputting %s: %s\n", row[1], entry)
 	case "ExchangeToWithdraw":
+	case "Exchange To Withdraw":
 		// ExchangeToWithDraw represents the first of two operations that are involved in removing funds from NEXO.
 		// This transaction records a 1:1 converion of GBPX to GBP.
 		// There should be a correspodning (later) matching WithdrawExchanged that records the actual removal of the funds.
@@ -533,8 +537,17 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 				if err != nil {
 					errorOutput += fmt.Sprintf("TX %s: ExchangeToWithdraw Output Amount conversion error: %s, issue: %s\n", row[tx_ID], row[tx_OutputAmount], err)
 				}
-				if inputAmountFloat == -outputAmountFloat {
-					valuesDiffer = false
+				// Note that this is a sanity check: inputAmountFloat and outputAmountFloat are not used elsewhere
+				if row[tx_Type] == "Exchange To Withdraw" {
+					// The new-style (2023 onwards) report has input and output amounts with the same sign
+					if inputAmountFloat == outputAmountFloat {
+						valuesDiffer = false
+					}
+				} else {
+					// The old-style (2022 and before) report has input and output amounts with the same sign
+					if inputAmountFloat == -outputAmountFloat {
+						valuesDiffer = false
+					}
 				}
 			}
 			if valuesDiffer {
@@ -553,6 +566,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		rowCopy := append(make([]string, 0, len(row)), row...)
 		*exchangeToWithdraw = append(*exchangeToWithdraw, rowCopy) // Add the record to the FIFO
 	case "WithdrawExchanged":
+	case "Withdraw Exchanged":
 		// WithdrawExchanged represents the second of two operations that are involved in removing funds from NEXO.
 		// This transaction records the actual withdrawal of GBP from NEXO.
 		// There should be a corresponding (earlier) matching ExchangeToWithdraw.
@@ -583,12 +597,18 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 			// To check for a match all that is needed is that "Input Amount" [3] "Output Currency" [4]
 			// Note that "USD Equivalent" may not match presumably because the £/$ exchange rate may drift slightly
 			// between the times when the ExchangeToWithdraw and the WithdrawExchanged happen.
-			if (row[tx_InputAmount] != matchingExchangeToWithdraw[tx_InputAmount]) || (row[tx_OutputCurrency] != matchingExchangeToWithdraw[tx_OutputCurrency]) {
+			exchangeToWithdrawInputAmount := matchingExchangeToWithdraw[tx_InputAmount]
+			// The new-style (2023 onwards) records have a negative GBP for "Withdraw Exchanged" input amount
+			if row[tx_Type] == "Withdraw Exchanged" {
+				exchangeToWithdrawInputAmount = "-" + exchangeToWithdrawInputAmount
+			}
+			if (row[tx_InputAmount] != exchangeToWithdrawInputAmount) || (row[tx_OutputCurrency] != matchingExchangeToWithdraw[tx_OutputCurrency]) {
 				errorOutput += fmt.Sprintf("TX %s: WithdrawExchanged finds non-matching ExchangeToWithdraw [TX: %s]\n", row[tx_ID], matchingExchangeToWithdraw[tx_ID])
 			}
 		}
 		// Nothing needs to be recorded for a removal of fiat from NEXO
 	case "DepositToExchange":
+	case "Deposit To Exchange":
 		// DepositToExchange represents the first of two operations that are involved in adding funds to NEXO.
 		// There should be a correspodning (later) matching ExchangeDepositedOn that records the actual deposit of the funds.
 		// For now it is assumed that the corresponding WithdrawExchanged records occur in the same order as the corresponding
@@ -613,6 +633,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		rowCopy := append(make([]string, 0, len(row)), row...)
 		*depositToExchange = append(*depositToExchange, rowCopy) // Add the record to the FIFO
 	case "ExchangeDepositedOn":
+	case "Exchange Deposited On":
 		// ExchangeDepositedOn represents the second of two operations that are involved in depositing funds on NEXO.
 		// This transaction records the actual deposit of GBP on NEXO.
 		// There should be a corresponding (earlier) matching DepositToExchange.
@@ -672,6 +693,25 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		// Record the TRANSFER-OUT of a coin
 		entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "TRANSFER-OUT"}
 		(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
+	case "Top up Crypto":
+		// This represents an airdrop
+		valid := true
+		if row[tx_InputAmount] != row[tx_OutputAmount] {
+			errorOutput += fmt.Sprintf("TX %s: 'Top up Crypto' input amount (%d) and output amount (%d) do match\n", row[tx_ID], row[tx_InputAmount], row[tx_OutputAmount])
+			valid = false
+		}
+		if row[tx_InputCurrency] != row[tx_OutputCurrency] {
+			errorOutput += fmt.Sprintf("TX %s: 'Top up Crypto' input currency (%s) and output currency (%s) do match\n", row[tx_ID], row[tx_InputCurrency], row[tx_OutputCurrency])
+			valid = false
+		}
+		notes := "Airdrop: " + row[tx_Details]
+		if valid {
+			entry := []string{"", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "REWARD", "", "", "", "", "", "", "", "", "", notes}
+			(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
+		} else {
+			entry := []string{"**BAD DATA**", "nexo.io", row[tx_DateTime], "", row[tx_InputAmount], "", row[tx_UsdEquivalent][1:], "", "", "", "", "", "", "REWARD", "", "", "", "", "", "", "", "", "", notes}
+			(*output)[row[tx_InputCurrency]] = append((*output)[row[tx_InputCurrency]], entry)
+		}
 	default:
 		errorOutput += fmt.Sprintf("TX %s: Unhandled transaction type:[%s]\n", row[tx_ID], row[tx_Type])
 	}
