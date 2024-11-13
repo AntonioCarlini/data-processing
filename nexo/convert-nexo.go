@@ -104,7 +104,7 @@ func main() {
 	}
 
 	// The first element must match this exactly otherwise the format may have changed:
-	expectedFirstRow := []string{"Transaction", "Type", "Input Currency", "Input Amount", "Output Currency", "Output Amount", "USD Equivalent", "Details", "Date / Time"}
+	expectedFirstRow := []string{"Transaction", "Type", "Input Currency", "Input Amount", "Output Currency", "Output Amount", "USD Equivalent", "Details", "Date / Time (UTC)"}
 	firstRow := transactions[0]
 	if !testSlicesEqual(firstRow, expectedFirstRow) {
 		fmt.Printf("Expected first row format: %s\n", expectedFirstRow)
