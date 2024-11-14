@@ -80,6 +80,7 @@ type ledger struct {
 	subtype string
 	aclass  string
 	asset   string
+	wallet  string
 	amount  string
 	fee     string
 	balance string
@@ -141,7 +142,7 @@ func readTransactions(name string) [][]string {
 // At the end each cryptocurrency's data is gathered together in forward time order (crypto.com lists transactions in reverse time order).
 func convertTransactions(transactions [][]string) [][]string {
 	// The first element must match this exactly otherwise the format may have changed:
-	expectedFirstRow := []string{"txid", "refid", "time", "type", "subtype", "aclass", "asset", "amount", "fee", "balance"}
+	expectedFirstRow := []string{"txid", "refid", "time", "type", "subtype", "aclass", "asset", "wallet", "amount", "fee", "balance"}
 
 	firstRow := transactions[0]
 
@@ -167,7 +168,7 @@ func convertTransactions(transactions [][]string) [][]string {
 
 	for i, row := range transactions[1:] {
 		csvRowIndex := i + 2
-		entry := ledger{csvRowIndex, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9]}
+		entry := ledger{csvRowIndex, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]}
 
 		ukTime := convertKrakenTimeToUKTime(entry.time)
 		rowValuesAcceptable := areRowValuesAcceptable(entry)
