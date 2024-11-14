@@ -174,7 +174,7 @@ func convertTransactions(transactions [][]string) [][]string {
 		rowValuesAcceptable := areRowValuesAcceptable(entry)
 
 		switch entry.format {
-		case "deposit":
+		case "REQUIRES_VERIFICATION_deposit":
 			// TBD: ensure that this code checks everything that is documented
 			// If fiat currency, then it can be ignored (only "ZGBP" or "ZEUR" or "EUR.HOLD" will be seen here).
 			// If the currency ends in ".S" then this is the staking version of the currency, so save it to later match against a "transfer".
@@ -222,7 +222,7 @@ func convertTransactions(transactions [][]string) [][]string {
 					output[entry.asset] = append(output[entry.asset], data)
 				}
 			}
-		case "spend":
+		case "REQUIRES_VERIFICATION_spend":
 			// This entry only occurs as part of a token purchase.
 			// This entry provides details of the fiat currency used to purchase the token and the amount plus fee charged.
 			// The balance will be the amount of this fiat currency remaining after the transaction.
@@ -240,7 +240,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			}
 			// Save the entry in the pendingSpends map for later use by a "receive"
 			pendingSpends[entry.refid] = entry
-		case "receive":
+		case "REQUIRES_VERIFICATION_receive":
 			// Find the corresponding "spend" and use it to fill in the "BUY"
 			// Note that the actual spend is the amount plus the fee!
 			valid := true
@@ -287,7 +287,7 @@ func convertTransactions(transactions [][]string) [][]string {
 				// Remove the "spend" entry that has now been used
 				delete(pendingSpends, entry.refid)
 			}
-		case "withdrawal":
+		case "REQUIRES_VERIFICATION_withdrawal":
 			// TBD: ensure that this code checks everything that is documented
 			// TODO Comes in two types:
 			// TODO (a) first has no txid, second has txid; asset, amount and fee must match; use time from second
@@ -313,7 +313,7 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 				delete(pendingWithdrawals, entry.refid)
 			}
-		case "transfer":
+		case "REQUIRES_VERIFICATION_transfer":
 			// "transfer" is used to move a cryptocurrency into a staking pool, so it never produces any output
 			// TODO subtype must be either "spottostaking" or "stakingfromspot"
 			// TOOD subtype "spottostaking" must be matched with a pending withdrawal
@@ -372,7 +372,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			} else {
 				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
 			}
-		case "staking":
+		case "REQUIRES_VERIFICATION_staking":
 			// TBD: ensure that this code checks everything that is documented
 			// TODO tidy up but otherwise all is complete
 			valid := rowValuesAcceptable
@@ -552,15 +552,24 @@ func convertKrakenTimeToUKTime(utcTime string) string {
 // Must be present: "refid", "time", "type", "aclass", "asset", "amount", "fee"
 func areRowValuesAcceptable(entry ledger) bool {
 	valid := true
+
 	if entry.refid == "" || entry.time == "" || entry.format == "" || entry.asset == "" || entry.amount == "" || entry.fee == "" {
 		fmt.Printf("ledger entry row %d has invalid empty entry\n", entry.row)
 		valid = false
 	}
+
 	if entry.aclass != "currency" {
 		// "aclass" is documentd as: "Asset Class. Value is always "currency". Not a useful field."
 		fmt.Printf("ledger entry row %d has invalid 'aclass'\n", entry.row)
 		valid = false
 	}
+
+	if entry.subtype != "" && (entry.format != "earn" && entry.format != "transfer") {
+		fmt.Printf("ledger entry row %d has non-blank subtype\n", entry.row)
+		valid = false
+
+	}
+
 	return valid
 }
 
