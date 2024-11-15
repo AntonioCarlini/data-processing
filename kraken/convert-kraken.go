@@ -222,25 +222,25 @@ func convertTransactions(transactions [][]string) [][]string {
 					output[entry.asset] = append(output[entry.asset], data)
 				}
 			}
-		case "REQUIRES_VERIFICATION_spend":
-			// This entry only occurs as part of a token purchase.
-			// This entry provides details of the fiat currency used to purchase the token and the amount plus fee charged.
-			// The balance will be the amount of this fiat currency remaining after the transaction.
-			// Preserve this in the spending map so the data contained can be used when the corresponding "receive" is seen.
-			// One check is to make sure that the reference number is not already in the map
+		case "spend":
+			// This entry only occurs when a token is purchased by selling another token.
+			// The "spend" entry covers selling the first token.
+			// The corresponding "receive" entry covers buying the second token.
+			// In all cases seen so far, the "spend" precedes the "receive".
+			// The two are linked as a single logical transaction by having the same unique ref-id.
 			if prev, found := pendingSpends[entry.refid]; found {
 				fmt.Printf("Saw spend with repeated refid: %s (previous in row %d)\n", entry.refid, prev.row)
 			}
 			// Check txid not blank and format is valid
 			// Check subtype is blank
 			// Check that balance is not blank
-			// This will be re-checked later but report it now in case no correspdonding receive is seen
+			// This will be re-checked later but report it now in case no correspdonding "receive" is seen
 			if entry.txid == "" || entry.subtype != "" || entry.balance == "" {
 				fmt.Printf("Saw 'spend' with missing fields in row %d\n", entry.row)
 			}
 			// Save the entry in the pendingSpends map for later use by a "receive"
 			pendingSpends[entry.refid] = entry
-		case "REQUIRES_VERIFICATION_receive":
+		case "receive":
 			// Find the corresponding "spend" and use it to fill in the "BUY"
 			// Note that the actual spend is the amount plus the fee!
 			valid := true
@@ -372,9 +372,13 @@ func convertTransactions(transactions [][]string) [][]string {
 			} else {
 				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
 			}
-		case "REQUIRES_VERIFICATION_staking":
+		case "staking":
 			// TBD: ensure that this code checks everything that is documented
 			// TODO tidy up but otherwise all is complete
+			// TODO expect wallet "spot / main"
+			// expect subtype is blank
+			// asset should have a suffix of .S
+			// fee should be 0
 			valid := rowValuesAcceptable
 			stakedCurrency := strings.TrimSuffix(entry.asset, ".S")
 			if stakedCurrency == entry.asset {
@@ -383,17 +387,17 @@ func convertTransactions(transactions [][]string) [][]string {
 			}
 			// Look for a pending deposit that matches the currency and the amount and has a blank txid.
 			// If such an entry is found, remove it from the pending deposits
-			foundDeposit := false
-			for k, v := range pendingStakingDeposits {
-				if v.asset == entry.asset && v.amount == entry.amount && v.txid == "" {
-					delete(pendingStakingDeposits, k)
-					foundDeposit = true
-					break
-				}
-			}
-			if !foundDeposit {
-				fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
-			}
+			// TODO-VERIFY-OR-REMOVE foundDeposit := false
+			// TODO-VERIFY-OR-REMOVE for k, v := range pendingStakingDeposits {
+			// TODO-VERIFY-OR-REMOVE	if v.asset == entry.asset && v.amount == entry.amount && v.txid == "" {
+			// TODO-VERIFY-OR-REMOVE		delete(pendingStakingDeposits, k)
+			// TODO-VERIFY-OR-REMOVE		foundDeposit = true
+			// TODO-VERIFY-OR-REMOVE		break
+			// TODO-VERIFY-OR-REMOVE	}
+			// TODO-VERIFY-OR-REMOVE }
+			// TODO-VERIFY-OR-REMOVE if !foundDeposit {
+			// TODO-VERIFY-OR-REMOVE	fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
+			// TODO-VERIFY-OR-REMOVE }
 			if valid {
 				tokenValueFloat32 := 0.0
 				// TODO-price-lookup if err != nil {
