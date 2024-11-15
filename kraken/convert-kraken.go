@@ -381,10 +381,10 @@ func convertTransactions(transactions [][]string) [][]string {
 			// fee should be 0
 			valid := rowValuesAcceptable
 			stakedCurrency := strings.TrimSuffix(entry.asset, ".S")
-			if stakedCurrency == entry.asset {
-				valid = false
-				fmt.Printf("row %d, staking asset does not have .S suffix: %s\n [%s]\n", csvRowIndex, entry.asset, row)
-			}
+			// TODO-find-meaning-of-.S if stakedCurrency == entry.asset {
+			// TODO-find-meaning-of-.S 	valid = false
+			// TODO-find-meaning-of-.S 	fmt.Printf("row %d, staking asset does not have .S suffix: %s\n [%s]\n", csvRowIndex, entry.asset, row)
+			// TODO-find-meaning-of-.S }
 			// Look for a pending deposit that matches the currency and the amount and has a blank txid.
 			// If such an entry is found, remove it from the pending deposits
 			// TODO-VERIFY-OR-REMOVE foundDeposit := false
