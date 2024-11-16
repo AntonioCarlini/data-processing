@@ -23,6 +23,17 @@ package main
 // Notes regarding how transactions are recorded in the ledger.
 // These are based partly on the documentation but mainly on observation of transactions in the ledger.
 //
+// These notes apply in late 2024:
+//
+// Staking reward:
+//    - "staking" of token.S with non-blank balance
+//
+// Purchase of a token:
+//    - "spend" of token with refid REF-A
+//    - "receive" of token with refid REF-A
+//
+// The notes below are historical ones from before 2024:
+//
 // Deposit of fiat currency into kraken
 //    - "deposit" or ZGBP or ZEUR or EUR.HOLD with blank txid and refid REF-A
 //    - "deposit" or ZGBP or ZEUR or EUR.HOLD with blank txid and refid REF-A
@@ -32,19 +43,12 @@ package main
 //    - "deposit" of token with refid REF-A and blank txid and blank balance
 //    - "deposit" of token with refid REF-A and non-blank txid and non-blank balance
 //
-// Purchase of a token:
-//    - "spend" of fiat with refid REF-A
-//    - "receive" of token with refid REF-A
-//
 // Staking of a token
 //    - "withdrawal" of token with blank txid and refid REF-A
 //    - "deposit" of token.S with blank txid and refid REF-B
 //    - "transfer" of token.S with refid REF-B and and subtype "stakingfromspot"
 //    - "transfer" of token with refid REF-A and subtype "spottostaking"
 //
-// Staking reward:
-//    - "deposit" of token.S with blank balance
-//    - "staking" of token.S with non-blank balance
 //
 //  Withdrawal of fiat currency from kraken
 //    TBD
