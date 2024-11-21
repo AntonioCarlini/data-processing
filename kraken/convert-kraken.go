@@ -156,7 +156,8 @@ func convertTransactions(transactions [][]string) [][]string {
 
 	output := make(map[string][][]string, 0)
 	pendingSpends := make(map[string]ledger)
-	pendingWithdrawals := make(map[string]ledger)
+	pendingSpotToStaking := make(map[string]ledger)
+	pendingWithdrawals := make(map[string]ledger) // Only used by "withdrawal" transactions, which are not currently (2024-11) active
 	pendingStakingDeposits := make(map[string]ledger)
 	pendingTokenDeposits := make(map[string]ledger)
 
@@ -281,6 +282,81 @@ func convertTransactions(transactions [][]string) [][]string {
 				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
 			}
+		case "transfer":
+			// TODO
+			// "LWZJC4-FLL6I-VGTGBJ","BUMTXMY-2XXW32-Z6F6ME","2023-04-17 09:47:16","transfer","spottostaking","currency","FLOW","spot / main",-13000.0000000000,0,6041.7838117000
+			// "LL722W-QEXKS-NOD242","RUL64FH-ONZZLW-PMDP5C","2023-04-17 09:47:58","transfer","stakingfromspot","currency","FLOW.S","spot / main",13000.0000000000,0,13000.0000008778
+
+			// "LQW6OB-H6RUO-H5RKYU","FTFtciV-kUU09amveWZUx8DoaXWVmF","2023-11-02 17:50:21","transfer","spottostaking","currency","FLOW","spot / main",-6041.7838117000,0,0.0000000000
+			// "LAOTPT-5Y6NM-ECKZE6","FTQFjkT-5mOIHj8nu4XWRyZDOI5zdA","2023-11-02 17:51:15","transfer","stakingfromspot","currency","FLOW.S","spot / main",6041.7838117000,0,19254.7259528278
+
+			// "transfer" is used to move a cryptocurrency into a staking pool, so it never produces any output
+			// TODO subtype must be either "spottostaking" or "stakingfromspot"
+			// TOOD subtype "spottostaking" must be matched with a pending withdrawal
+			// TODO subtype "stakingfromspot" must be matched with a pending staking deposit
+			// TODO subtype "spotfromfutures" must be matched with a pending token deposit
+			// TODO txid must not be blank
+			// TODO balance must not be blank
+			// TODO: may be matched with a previous "withdrawal", in which case it represents an initial move into staking
+			//
+			// This code checks everything that is documented.
+			// In addition a transfer with subtype "spotfromfutures" (that requires a deposit with a matching refid) has been seen.
+			// This happened during the Ethereum Merge (moving from PoW to PoS) and shows in the online history as "EthereumPoW".
+			// It has been noted and checked, but no output is generated,
+			if entry.subtype == "spottostaking" {
+				// This entry (and the matching "stakingfromspot") represent a move of a cryptoasset to the staking pool
+				// It is assumed that the "spottostaking" will always precede the matching "stakingfromspot".
+				// There seems to be no connection, the ref-id values do not match.
+				// It seems that the only way to match "spottostaking" and "stakingfromspot" is to check the amounts and require that the two transactions be within a few seconds of each other!
+				// TOOD: For now, just ignore this entry.
+				// No output row will be written.
+			} else if entry.subtype == "stakingfromspot" {
+				// This entry (and the matching "spottostaking") represent a move of a cryptoasset to the staking pool
+				// It is assumed that the "spottostaking" will always precede the matching "stakingfromspot".
+				// There seems to be no connection, the ref-id values do not match.
+				// It seems that the only way to match "spottostaking" and "stakingfromspot" is to check the amounts and require that the two transactions be within a few seconds of each other!
+				// TOOD: For now, just ignore this entry.
+				// No output row will be written.
+			} else if entry.subtype == "spotfromfutures" {
+				// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+				// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+				log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
+				if _, found := pendingTokenDeposits[entry.refid]; !found {
+					fmt.Printf("transfer spotfromfutures with no matching deposit on row %d\n", entry.row)
+				} else {
+					delete(pendingTokenDeposits, entry.refid)
+				}
+			} else if entry.subtype == "stakingtospot" {
+				// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+				// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+				log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
+				// This seems to represent a withdrawl from staking
+				// TODO this should match a withdrawl and should involve a .S currency
+				valid := true
+				var withdrawal ledger
+				withdrawal, valid = pendingSpotToStaking[entry.refid]
+				if !valid {
+					fmt.Printf("transfer (stakingtospot) on row %d has no matching withdrawal\n", entry.row)
+				} else if (entry.amount != withdrawal.amount) || (entry.fee != withdrawal.fee) || (entry.asset != withdrawal.asset) {
+					fmt.Printf("transfer (stakingtospot) on row %d does not properly match withdrawal on row %d\n", entry.row, withdrawal.row)
+				}
+				delete(pendingSpotToStaking, entry.refid)
+			} else if entry.subtype == "spotfromstaking" {
+				// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+				// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+				log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
+				// This seems to represent a withdrawl from staking
+				// TODO should match a deposit, but there is no check for that yet
+			} else {
+				// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+				// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+				log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
+				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
+			}
 		case "deposit":
 			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
 			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
@@ -363,69 +439,6 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 				delete(pendingWithdrawals, entry.refid)
 			}
-		case "transfer":
-			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
-			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
-			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
-
-			// "transfer" is used to move a cryptocurrency into a staking pool, so it never produces any output
-			// TODO subtype must be either "spottostaking" or "stakingfromspot"
-			// TOOD subtype "spottostaking" must be matched with a pending withdrawal
-			// TODO subtype "stakingfromspot" must be matched with a pending staking deposit
-			// TODO subtype "spotfromfutures" must be matched with a pending token deposit
-			// TODO txid must not be blank
-			// TODO balance must not be blank
-			// TODO: may be matched with a previous "withdrawal", in which case it represents an initial move into staking
-			//
-			// This code checks everything that is documented.
-			// In addition a transfer with subtype "spotfromfutures" (that requires a deposit with a matching refid) has been seen.
-			// This happened during the Ethereum Merge (moving from PoW to PoS) and shows in the online history as "EthereumPoW".
-			// It has been noted and checked, but no output is generated,
-			if entry.subtype == "spottostaking" {
-				// This entry (and the matching "withdrawal") represent a move of a cryptoasset to the staking pool
-				// No output row will be written. The matching "withdrawal" must be found, checked and removed from the pending withdrawals.
-				valid := true
-				var withdrawal ledger
-				withdrawal, valid = pendingWithdrawals[entry.refid]
-				if !valid {
-					fmt.Printf("transfer on row %d has no matching withdrawal\n", entry.row)
-				} else if (entry.amount != withdrawal.amount) || (entry.fee != withdrawal.fee) || (entry.asset != withdrawal.asset) {
-					fmt.Printf("transfer on row %d does not properly match withdrawal on row %d\n", entry.row, withdrawal.row)
-				}
-				delete(pendingWithdrawals, entry.refid)
-			} else if entry.subtype == "stakingfromspot" {
-				// TODO make sure there is a pending staking deposit for this
-				if _, found := pendingStakingDeposits[entry.refid]; !found {
-					// TODO
-					fmt.Printf("transfer stakingfromspot with no matching deposit on row %d\n", entry.row)
-				} else {
-					// TODO this is matched so it is OK
-					delete(pendingStakingDeposits, entry.refid)
-				}
-			} else if entry.subtype == "spotfromfutures" {
-				if _, found := pendingTokenDeposits[entry.refid]; !found {
-					fmt.Printf("transfer spotfromfutures with no matching deposit on row %d\n", entry.row)
-				} else {
-					delete(pendingTokenDeposits, entry.refid)
-				}
-			} else if entry.subtype == "stakingtospot" {
-				// This seems to represent a withdrawl from staking
-				// TODO this should match a withdrawl and should involve a .S currency
-				valid := true
-				var withdrawal ledger
-				withdrawal, valid = pendingWithdrawals[entry.refid]
-				if !valid {
-					fmt.Printf("transfer (stakingtospot) on row %d has no matching withdrawal\n", entry.row)
-				} else if (entry.amount != withdrawal.amount) || (entry.fee != withdrawal.fee) || (entry.asset != withdrawal.asset) {
-					fmt.Printf("transfer (stakingtospot) on row %d does not properly match withdrawal on row %d\n", entry.row, withdrawal.row)
-				}
-				delete(pendingWithdrawals, entry.refid)
-			} else if entry.subtype == "spotfromstaking" {
-				// This seems to represent a withdrawl from staking
-				// TODO should match a deposit, but there is no check for that yet
-			} else {
-				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
-			}
 		case "trade":
 			// TBD
 			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
@@ -461,6 +474,11 @@ func convertTransactions(transactions [][]string) [][]string {
 	// Warn if there any unmatched spends
 	for _, v := range pendingSpends {
 		fmt.Printf("Error: Unmatched \"spend\": row: %d entry=%v\n", v.row, v)
+	}
+
+	// Warn if there any unmatched withdrawals
+	for _, v := range pendingSpotToStaking {
+		fmt.Printf("Error: Unmatched \"spotTostaking\": row: %d entry=%v\n", v.row, v)
 	}
 
 	// Warn if there any unmatched withdrawals
