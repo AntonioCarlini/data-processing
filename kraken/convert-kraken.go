@@ -271,10 +271,10 @@ func convertTransactions(transactions [][]string) [][]string {
 			// TODO-VERIFY-OR-REMOVE	fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
 			// TODO-VERIFY-OR-REMOVE }
 			if valid {
-				tokenValueFloat32 := 0.0
-				// TODO-price-lookup if err != nil {
-				// TODO-price-lookup 	log.Fatal(err)
-				// TODO-price-lookup }
+				tokenValueFloat32, err := LookupHistoricalTokenValue(stakedCurrency, entry.time)
+				if err != nil {
+					log.Fatal(err)
+				}
 				tokenValue := fmt.Sprintf("%f", tokenValueFloat32)
 				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenValue, "", "", "", "", "", "", "", "STAKING"}
 				output[stakedCurrency] = append(output[stakedCurrency], data)
@@ -357,6 +357,59 @@ func convertTransactions(transactions [][]string) [][]string {
 
 				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
 			}
+		case "earn":
+			// "earn/migration" seems to occur as a pair with spot and earn wallets.
+			// It seems to be a new way of recording staking.
+			// "earn/reward" seems to be just like staking
+			valid := rowValuesAcceptable
+			if entry.subtype == "migration" {
+				// TODO there should be some checks to make sure that ear/migrations match
+				// TODO for now, ignore this as there is no output and no tax implication
+			} else if entry.subtype == "reward" {
+				stakedCurrency := entry.asset
+				if valid {
+					tokenValueFloat32, err := LookupHistoricalTokenValue(stakedCurrency, entry.time)
+					if err != nil {
+						log.Fatal(err)
+					}
+					tokenValue := fmt.Sprintf("%f", tokenValueFloat32)
+					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenValue, "", "", "", "", "", "", "", "STAKING"}
+					output[stakedCurrency] = append(output[stakedCurrency], data)
+				} else {
+					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
+					output[stakedCurrency] = append(output[stakedCurrency], data)
+				}
+			} else {
+				log.Fatalf("row %d: unhandled earn subtype %s\n", entry.row, entry.subtype)
+			}
+			// "LU4CV4-NPA3Y-BSYGR6","ELJ5SEV-RRMHX-BY3FP6","2024-02-15 12:32:39","earn","migration","currency","FLOW.S","spot / main",-19362.3315756678,0,0.0000000000
+			// "LZNGUJ-GH5K5-M2UR5R","ELJ5SEV-RRMHX-BY3FP6","2024-02-15 12:32:39","earn","migration","currency","FLOW","earn / flexible",19362.3315756678,0,19362.3315756678
+			// "LAOAXD-FRAPU-63S5C6","ELRVG7C-I7Y3J-UXVADZ","2024-02-16 13:30:33","earn","reward","currency","FLOW","earn / flexible",1.8798328066,0.3759665613,19363.8354419131
+			// TBD: ensure that this code checks everything that is documented
+			// TODO tidy up but otherwise all is complete
+			// TODO expect wallet "spot / main"
+			// expect subtype is blank
+			// asset should have a suffix of .S
+			// fee should be 0
+
+			// TODO-find-meaning-of-.S if stakedCurrency == entry.asset {
+			// TODO-find-meaning-of-.S 	valid = false
+			// TODO-find-meaning-of-.S 	fmt.Printf("row %d, staking asset does not have .S suffix: %s\n [%s]\n", csvRowIndex, entry.asset, row)
+			// TODO-find-meaning-of-.S }
+			// Look for a pending deposit that matches the currency and the amount and has a blank txid.
+			// If such an entry is found, remove it from the pending deposits
+			// TODO-VERIFY-OR-REMOVE foundDeposit := false
+			// TODO-VERIFY-OR-REMOVE for k, v := range pendingStakingDeposits {
+			// TODO-VERIFY-OR-REMOVE	if v.asset == entry.asset && v.amount == entry.amount && v.txid == "" {
+			// TODO-VERIFY-OR-REMOVE		delete(pendingStakingDeposits, k)
+			// TODO-VERIFY-OR-REMOVE		foundDeposit = true
+			// TODO-VERIFY-OR-REMOVE		break
+			// TODO-VERIFY-OR-REMOVE	}
+			// TODO-VERIFY-OR-REMOVE }
+			// TODO-VERIFY-OR-REMOVE if !foundDeposit {
+			// TODO-VERIFY-OR-REMOVE	fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
+			// TODO-VERIFY-OR-REMOVE }
+
 		case "deposit":
 			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
 			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
@@ -683,4 +736,28 @@ func isFiatCurrency(currency string) bool {
 	}
 	_, found := acceptedFiatCurrencies[currency]
 	return found
+}
+
+// This will be a map of '"coin-name" @ "YYYY-MM-DD"' => coin price in USD as a fp number
+var coinHistoricalPrices map[string]float32
+
+func LookupHistoricalTokenValue(requestedToken string, dateTime string) (float32, error) {
+	// Verify the date is valid and turn into the format coingecko wants (DD-MM-YY HH:MM:SS)
+	date, err := time.Parse("2006-01-02 15:04:05", dateTime)
+	if err != nil {
+		log.Fatalf("Invalid date (%s) when looking up token %s: %s\n", dateTime, requestedToken, err)
+	}
+	cgDate := date.Format("02-01-2006 15:04:05")
+
+	// The cache is indexed according to coin name and date
+	index := requestedToken + "@" + cgDate
+	price, ok := coinHistoricalPrices[index]
+	// If the key exists
+	if !ok {
+		price = -1.0
+	}
+
+	// Deliberately return no error for now ... no prices are available yet!
+	return price, nil
+
 }
