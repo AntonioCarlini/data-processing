@@ -96,21 +96,21 @@ var historicalPriceCacheUpdated bool = false
 // Open the input file, convert it to the output format and write it out in CSV format
 func main() {
 
-	// TODO-price-lookup cliHpcFilename := flag.String("cache", "", "File that contains the historical price data (CSV)")
+	cliHpdPath := flag.String("cache", "", "Directory that contains the historical price data (CSV)")
 	flag.Parse()
 
-	// TODO-price-lookup home := os.Getenv("HOME")
-	// TODO-price-lookup hpcFilename := home + "/.config/coin-prices/cg-price-cache.csv"
-	// TODO-price-lookup if *cliHpcFilename != "" {
-	// TODO-price-lookup 	hpcFilename = *cliHpcFilename
-	// TODO-price-lookup }
+	home := os.Getenv("HOME")
+	hpdFilename := home + "/.config/coin-prices/price-data/"
+	if *cliHpdPath != "" {
+		hpdFilename = *cliHpdPath
+	}
 
 	inputs := flag.Args()
 	if len(inputs) != 2 {
 		log.Fatalf("Exactly 2 arguments required but %d supplied\n", len(inputs))
 	}
 
-	// TODO-price-lookup loadHistoricalPriceCache(hpcFilename)
+	loadPriceData(hpdFilename)
 
 	transactionsFilename := flag.Arg(0)
 	outputFile := flag.Arg(1)
@@ -207,7 +207,8 @@ func convertTransactions(transactions [][]string) [][]string {
 				fmt.Printf("Saw 'receive' in row %d with no matching spend)\n", entry.row)
 				valid = false
 			} else {
-				totalSpend := calculateSpendAsString(spend)
+				// totalSpendGBP := calculateSpendAsString(spend)
+				totalSpendUSD := ""
 				// Perform some checks for both the "receive" and the "spend" entries
 				// Check txid not blank and format is valid
 				// Check subtype is blank
@@ -225,20 +226,23 @@ func convertTransactions(transactions [][]string) [][]string {
 				note := fmt.Sprintf("SELL %s %s to buy %s %s", strings.TrimLeft(spend.amount, "-"), spend.asset, entry.amount, entry.asset)
 				if spend.asset == "FLOW" {
 					// TODO here sell FLOW amount will be -ve to show a spend; there will be a matching refid to show the currency purchased
+					// The spend in fiat currency is not known, so both the SELL and BUY will have to be calculated manually
+					// As a starting point, find the value of the purchased currentcy and use that for both.
+					// That should produce a reasonable value for the amount received for the initial token minus costs
+					tokenValueFloat32, _ := LookupHistoricalTokenValue(entry.asset, entry.time)
+					totalSpendUSD = fmt.Sprintf("%f", tokenValueFloat32)
 					ukSpendTime := convertKrakenTimeToUKTime(spend.time)
 					data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", "", "", "", "", "", "", "", "SELL", "O", "", "", "", "", "T", "U", "V", "W", note}
 					output[spend.asset] = append(output[spend.asset], data)
-					// The spend in fiat currency is not known, so both the SELL and BUY will have to be calculated manually
-					totalSpend = ""
 				} else if spend.asset != "ZGBP" {
 					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", spend.asset, spend.row)
 					valid = false
 				}
 				if valid {
-					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", note}
+					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", totalSpendUSD, "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", note}
 					output[entry.asset] = append(output[entry.asset], data)
 				} else {
-					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", totalSpend, "", "", "", "", "BUY **BAD DATA**"}
+					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", totalSpendUSD, "", "", "", "", "", "", "", "BUY **BAD DATA**"}
 					output[entry.asset] = append(output[entry.asset], data)
 				}
 				// Remove the "spend" entry that has now been used
@@ -741,23 +745,91 @@ func isFiatCurrency(currency string) bool {
 // This will be a map of '"coin-name" @ "YYYY-MM-DD"' => coin price in USD as a fp number
 var coinHistoricalPrices map[string]float32
 
+func loadPriceData(priceDataDir string) {
+
+	coins := []string{
+		"ada",
+		"avax",
+		"axs",
+		"bsgg",
+		"btc",
+		"dot",
+		"doge",
+		"enj",
+		"erg",
+		"eth",
+		"flow",
+		"mana",
+		"sand",
+		"sol",
+		"wmemo",
+	}
+
+	coinHistoricalPrices = make(map[string]float32)
+	for _, c := range coins {
+		priceFile := fmt.Sprintf("%scoin-price-data-%s-usd.csv", priceDataDir, c)
+		// DEBUG fmt.Println(index, priceFile)
+		loadPriceDataForCoin(c, priceFile)
+	}
+
+}
+
+func loadPriceDataForCoin(c string, priceFile string) {
+	f, err := os.Open(priceFile)
+	if err != nil {
+		log.Fatalf("Unable to read input price file %s", priceFile, err)
+	}
+	defer f.Close()
+
+	csvReader := csv.NewReader(f)
+	data, err := csvReader.ReadAll()
+	if err != nil {
+		log.Fatalf("Unable to parse file as CSV for %s", priceFile, err)
+	}
+	for line_num, entry := range data {
+		if line_num == 0 {
+			continue
+		}
+		date, err := time.Parse("2006-01-02 15:04:05 UTC", entry[0])
+		if err != nil {
+			log.Fatalf("Invalid date (%s) on line %d of file %s\n", entry[0], line_num, priceFile, err)
+		}
+		cacheDate := date.Format("2006-01-02")
+		price64, err := strconv.ParseFloat(entry[1], 32)
+		if err != nil {
+			// do something sensible
+		}
+		price := float32(price64)
+		cacheIndex := c + "@" + cacheDate
+		_, ok := coinHistoricalPrices[cacheIndex]
+		// If the key exists already, something is wrong
+		if ok {
+			log.Fatalf("duplicate cache value (index=%s) at line %d in file %s", cacheIndex, line_num, priceFile)
+		}
+		coinHistoricalPrices[cacheIndex] = price
+	}
+
+}
+
 func LookupHistoricalTokenValue(requestedToken string, dateTime string) (float32, error) {
 	// Verify the date is valid and turn into the format coingecko wants (DD-MM-YY HH:MM:SS)
 	date, err := time.Parse("2006-01-02 15:04:05", dateTime)
 	if err != nil {
 		log.Fatalf("Invalid date (%s) when looking up token %s: %s\n", dateTime, requestedToken, err)
 	}
-	cgDate := date.Format("02-01-2006 15:04:05")
+	cgDate := date.Format("2006-01-02")
 
 	// The cache is indexed according to coin name and date
-	index := requestedToken + "@" + cgDate
+	index := strings.ToLower(requestedToken) + "@" + cgDate
 	price, ok := coinHistoricalPrices[index]
 	// If the key exists
 	if !ok {
+		fmt.Printf("failed to find price for [%s]\n", index)
 		price = -1.0
 	}
 
 	// Deliberately return no error for now ... no prices are available yet!
+	// DEBUG fmt.Printf("Price lookup for %s at %s produces %f\n", requestedToken, dateTime, price)
 	return price, nil
 
 }
