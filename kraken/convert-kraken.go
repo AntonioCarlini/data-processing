@@ -178,54 +178,6 @@ func convertTransactions(transactions [][]string) [][]string {
 		rowValuesAcceptable := areRowValuesAcceptable(entry)
 
 		switch entry.format {
-		case "REQUIRES_VERIFICATION_deposit":
-			// TBD: ensure that this code checks everything that is documented
-			// If fiat currency, then it can be ignored (only "ZGBP" or "ZEUR" or "EUR.HOLD" will be seen here).
-			// If the currency ends in ".S" then this is the staking version of the currency, so save it to later match against a "transfer".
-			// Otherwise this is a TRANSFER-IN of that currency.
-			valid := rowValuesAcceptable
-			if isFiatCurrency(entry.asset) {
-				// This is a fiat currency deposit and so does not need to be processed further
-				// TODO: check fiat deposits more thoroughly
-			} else if strings.HasSuffix(entry.asset, ".S") {
-				// This is either:
-				//   a request to stake currency (e.g. FLOW.S) which should later be matched by a "transfer" with the same refid
-				// or
-				//   a staking reward which should later be matched by a "staking" with matching details
-				if prev, found := pendingStakingDeposits[entry.refid]; found {
-					fmt.Printf("Saw deposit of staked currency with repeated refid: %s (previous in row %d)\n", entry.refid, prev.row)
-				}
-				pendingStakingDeposits[entry.refid] = entry
-			} else {
-				// This is a deposit of a token into the Kraken wallet.
-				// Kraken lists these twice: firstly with a blank txid and a blank balance, and a second time with identical details but non-blank txid and balance. The same refid is used.
-				// Store the first entry in pendingTokenDeposist and check that it is there when the second entry is seen. Only second entry triggers an output.
-				// If only one but not both of txid and balance is blank, this is an unexpected error.
-				if (entry.txid == "" && entry.balance != "") || (entry.txid != "" && entry.balance == "") {
-					valid = false
-				}
-				if valid {
-					if entry.txid == "" && entry.balance == "" {
-						// This is the first of two expected deposits relating to a token. Store it for later processing.
-						pendingTokenDeposits[entry.refid] = entry
-					} else {
-						if prev, found := pendingTokenDeposits[entry.refid]; !found {
-							fmt.Printf("Saw deposit of token in row %d with without preparatory deposit\n", entry.row)
-						} else {
-							if (entry.asset != prev.asset) || (entry.amount != prev.amount) || (entry.fee != prev.fee) {
-								fmt.Printf("Saw matching deposit of token from row %d with values that do not match row %d)\n", prev.row, entry.row)
-							} else {
-								data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN"}
-								output[entry.asset] = append(output[entry.asset], data)
-							}
-
-						}
-					}
-				} else {
-					data := []string{"**BAD DATA", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN **BAD DATA"}
-					output[entry.asset] = append(output[entry.asset], data)
-				}
-			}
 		case "spend":
 			// This entry only occurs when a token is purchased by selling another token.
 			// The "spend" entry covers selling the first token.
@@ -291,7 +243,101 @@ func convertTransactions(transactions [][]string) [][]string {
 				// Remove the "spend" entry that has now been used
 				delete(pendingSpends, entry.refid)
 			}
-		case "REQUIRES_VERIFICATION_withdrawal":
+		case "staking":
+			// TBD: ensure that this code checks everything that is documented
+			// TODO tidy up but otherwise all is complete
+			// TODO expect wallet "spot / main"
+			// expect subtype is blank
+			// asset should have a suffix of .S
+			// fee should be 0
+			valid := rowValuesAcceptable
+			stakedCurrency := strings.TrimSuffix(entry.asset, ".S")
+			// TODO-find-meaning-of-.S if stakedCurrency == entry.asset {
+			// TODO-find-meaning-of-.S 	valid = false
+			// TODO-find-meaning-of-.S 	fmt.Printf("row %d, staking asset does not have .S suffix: %s\n [%s]\n", csvRowIndex, entry.asset, row)
+			// TODO-find-meaning-of-.S }
+			// Look for a pending deposit that matches the currency and the amount and has a blank txid.
+			// If such an entry is found, remove it from the pending deposits
+			// TODO-VERIFY-OR-REMOVE foundDeposit := false
+			// TODO-VERIFY-OR-REMOVE for k, v := range pendingStakingDeposits {
+			// TODO-VERIFY-OR-REMOVE	if v.asset == entry.asset && v.amount == entry.amount && v.txid == "" {
+			// TODO-VERIFY-OR-REMOVE		delete(pendingStakingDeposits, k)
+			// TODO-VERIFY-OR-REMOVE		foundDeposit = true
+			// TODO-VERIFY-OR-REMOVE		break
+			// TODO-VERIFY-OR-REMOVE	}
+			// TODO-VERIFY-OR-REMOVE }
+			// TODO-VERIFY-OR-REMOVE if !foundDeposit {
+			// TODO-VERIFY-OR-REMOVE	fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
+			// TODO-VERIFY-OR-REMOVE }
+			if valid {
+				tokenValueFloat32 := 0.0
+				// TODO-price-lookup if err != nil {
+				// TODO-price-lookup 	log.Fatal(err)
+				// TODO-price-lookup }
+				tokenValue := fmt.Sprintf("%f", tokenValueFloat32)
+				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenValue, "", "", "", "", "", "", "", "STAKING"}
+				output[stakedCurrency] = append(output[stakedCurrency], data)
+			} else {
+				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
+				output[stakedCurrency] = append(output[stakedCurrency], data)
+			}
+		case "deposit":
+			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
+			// TBD: ensure that this code checks everything that is documented
+			// If fiat currency, then it can be ignored (only "ZGBP" or "ZEUR" or "EUR.HOLD" will be seen here).
+			// If the currency ends in ".S" then this is the staking version of the currency, so save it to later match against a "transfer".
+			// Otherwise this is a TRANSFER-IN of that currency.
+			valid := rowValuesAcceptable
+			if isFiatCurrency(entry.asset) {
+				// This is a fiat currency deposit and so does not need to be processed further
+				// TODO: check fiat deposits more thoroughly
+			} else if strings.HasSuffix(entry.asset, ".S") {
+				// This is either:
+				//   a request to stake currency (e.g. FLOW.S) which should later be matched by a "transfer" with the same refid
+				// or
+				//   a staking reward which should later be matched by a "staking" with matching details
+				if prev, found := pendingStakingDeposits[entry.refid]; found {
+					fmt.Printf("Saw deposit of staked currency with repeated refid: %s (previous in row %d)\n", entry.refid, prev.row)
+				}
+				pendingStakingDeposits[entry.refid] = entry
+			} else {
+				// This is a deposit of a token into the Kraken wallet.
+				// Kraken lists these twice: firstly with a blank txid and a blank balance, and a second time with identical details but non-blank txid and balance. The same refid is used.
+				// Store the first entry in pendingTokenDeposist and check that it is there when the second entry is seen. Only second entry triggers an output.
+				// If only one but not both of txid and balance is blank, this is an unexpected error.
+				if (entry.txid == "" && entry.balance != "") || (entry.txid != "" && entry.balance == "") {
+					valid = false
+				}
+				if valid {
+					if entry.txid == "" && entry.balance == "" {
+						// This is the first of two expected deposits relating to a token. Store it for later processing.
+						pendingTokenDeposits[entry.refid] = entry
+					} else {
+						if prev, found := pendingTokenDeposits[entry.refid]; !found {
+							fmt.Printf("Saw deposit of token in row %d with without preparatory deposit\n", entry.row)
+						} else {
+							if (entry.asset != prev.asset) || (entry.amount != prev.amount) || (entry.fee != prev.fee) {
+								fmt.Printf("Saw matching deposit of token from row %d with values that do not match row %d)\n", prev.row, entry.row)
+							} else {
+								data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN"}
+								output[entry.asset] = append(output[entry.asset], data)
+							}
+
+						}
+					}
+				} else {
+					data := []string{"**BAD DATA", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN **BAD DATA"}
+					output[entry.asset] = append(output[entry.asset], data)
+				}
+			}
+		case "withdrawal":
+			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
 			// TBD: ensure that this code checks everything that is documented
 			// TODO Comes in two types:
 			// TODO (a) first has no txid, second has txid; asset, amount and fee must match; use time from second
@@ -317,7 +363,11 @@ func convertTransactions(transactions [][]string) [][]string {
 				}
 				delete(pendingWithdrawals, entry.refid)
 			}
-		case "REQUIRES_VERIFICATION_transfer":
+		case "transfer":
+			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
+			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
+			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+
 			// "transfer" is used to move a cryptocurrency into a staking pool, so it never produces any output
 			// TODO subtype must be either "spottostaking" or "stakingfromspot"
 			// TOOD subtype "spottostaking" must be matched with a pending withdrawal
@@ -375,44 +425,6 @@ func convertTransactions(transactions [][]string) [][]string {
 				// TODO should match a deposit, but there is no check for that yet
 			} else {
 				fmt.Printf("Invalid subtype (%s) for transfer on row %d\n", entry.subtype, entry.row)
-			}
-		case "staking":
-			// TBD: ensure that this code checks everything that is documented
-			// TODO tidy up but otherwise all is complete
-			// TODO expect wallet "spot / main"
-			// expect subtype is blank
-			// asset should have a suffix of .S
-			// fee should be 0
-			valid := rowValuesAcceptable
-			stakedCurrency := strings.TrimSuffix(entry.asset, ".S")
-			// TODO-find-meaning-of-.S if stakedCurrency == entry.asset {
-			// TODO-find-meaning-of-.S 	valid = false
-			// TODO-find-meaning-of-.S 	fmt.Printf("row %d, staking asset does not have .S suffix: %s\n [%s]\n", csvRowIndex, entry.asset, row)
-			// TODO-find-meaning-of-.S }
-			// Look for a pending deposit that matches the currency and the amount and has a blank txid.
-			// If such an entry is found, remove it from the pending deposits
-			// TODO-VERIFY-OR-REMOVE foundDeposit := false
-			// TODO-VERIFY-OR-REMOVE for k, v := range pendingStakingDeposits {
-			// TODO-VERIFY-OR-REMOVE	if v.asset == entry.asset && v.amount == entry.amount && v.txid == "" {
-			// TODO-VERIFY-OR-REMOVE		delete(pendingStakingDeposits, k)
-			// TODO-VERIFY-OR-REMOVE		foundDeposit = true
-			// TODO-VERIFY-OR-REMOVE		break
-			// TODO-VERIFY-OR-REMOVE	}
-			// TODO-VERIFY-OR-REMOVE }
-			// TODO-VERIFY-OR-REMOVE if !foundDeposit {
-			// TODO-VERIFY-OR-REMOVE	fmt.Printf("Failed to find corresponding deposit for staking on row %d\n", entry.row)
-			// TODO-VERIFY-OR-REMOVE }
-			if valid {
-				tokenValueFloat32 := 0.0
-				// TODO-price-lookup if err != nil {
-				// TODO-price-lookup 	log.Fatal(err)
-				// TODO-price-lookup }
-				tokenValue := fmt.Sprintf("%f", tokenValueFloat32)
-				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenValue, "", "", "", "", "", "", "", "STAKING"}
-				output[stakedCurrency] = append(output[stakedCurrency], data)
-			} else {
-				data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
-				output[stakedCurrency] = append(output[stakedCurrency], data)
 			}
 		case "trade":
 			// TBD
