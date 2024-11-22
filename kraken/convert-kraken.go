@@ -209,6 +209,7 @@ func convertTransactions(transactions [][]string) [][]string {
 			} else {
 				// totalSpendGBP := calculateSpendAsString(spend)
 				totalSpendUSD := ""
+				tokenPriceUSD := ""
 				// Perform some checks for both the "receive" and the "spend" entries
 				// Check txid not blank and format is valid
 				// Check subtype is blank
@@ -230,19 +231,31 @@ func convertTransactions(transactions [][]string) [][]string {
 					// As a starting point, find the value of the purchased currentcy and use that for both.
 					// That should produce a reasonable value for the amount received for the initial token minus costs
 					tokenValueFloat32, _ := LookupHistoricalTokenValue(entry.asset, entry.time)
-					totalSpendUSD = fmt.Sprintf("%f", tokenValueFloat32)
+					amount, err := strconv.ParseFloat(entry.amount, 32)
+					if err != nil {
+						fmt.Printf("Saw invalid token amount (%s) on row %d\n", entry.amount, entry.row)
+						valid = false
+					}
+					tokenPriceUSD = fmt.Sprintf("%f", tokenValueFloat32)
+					totalSpendUSD = fmt.Sprintf("%f", tokenValueFloat32*float32(amount))
 					ukSpendTime := convertKrakenTimeToUKTime(spend.time)
-					data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", "", "", "", "", "", "", "", "SELL", "O", "", "", "", "", "T", "U", "V", "W", note}
-					output[spend.asset] = append(output[spend.asset], data)
+					if valid {
+						data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", totalSpendUSD, "", "", "", "", "", "", "SELL", "O", "", "", "", "", "T", "U", "V", "W", note}
+						output[spend.asset] = append(output[spend.asset], data)
+					} else {
+						data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", totalSpendUSD, "", "", "", "", "", "", "SELL ** BAD DATA**"}
+						output[spend.asset] = append(output[spend.asset], data)
+
+					}
 				} else if spend.asset != "ZGBP" {
 					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", spend.asset, spend.row)
 					valid = false
 				}
 				if valid {
-					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", totalSpendUSD, "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", note}
+					data := []string{"", "Kraken", entry.time, ukTime, entry.amount, tokenPriceUSD, totalSpendUSD, "", "", "", "", "", "", "BUY", "", "", "", "", "", "", "", "", "", note}
 					output[entry.asset] = append(output[entry.asset], data)
 				} else {
-					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", totalSpendUSD, "", "", "", "", "", "", "", "BUY **BAD DATA**"}
+					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, tokenPriceUSD, totalSpendUSD, "", "", "", "", "", "", "", "BUY **BAD DATA**"}
 					output[entry.asset] = append(output[entry.asset], data)
 				}
 				// Remove the "spend" entry that has now been used
