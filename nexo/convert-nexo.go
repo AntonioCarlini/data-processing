@@ -697,7 +697,7 @@ func convertSingleTransaction(row []string, output *map[string][][]string, excha
 		// This represents an airdrop
 		valid := true
 		if row[tx_InputAmount] != row[tx_OutputAmount] {
-			errorOutput += fmt.Sprintf("TX %s: 'Top up Crypto' input amount (%d) and output amount (%d) do match\n", row[tx_ID], row[tx_InputAmount], row[tx_OutputAmount])
+			errorOutput += fmt.Sprintf("TX %s: 'Top up Crypto' input amount (%s) and output amount (%s) do match\n", row[tx_ID], row[tx_InputAmount], row[tx_OutputAmount])
 			valid = false
 		}
 		if row[tx_InputCurrency] != row[tx_OutputCurrency] {
