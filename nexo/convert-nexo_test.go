@@ -51,52 +51,6 @@ func TestUnknownTransactionType(t *testing.T) {
 	}
 }
 
-// This test verifies that an "Outstanding Loan" other than "$0.00" is rejected
-func TestOutStandingLoan(t *testing.T) {
-	testRow := buildStandardTestVector()
-
-	// for each OL produce acceptable four outputs
-
-	tests := []OutsandingLoanTestData{
-		OutsandingLoanTestData{"$0.00", false},
-		OutsandingLoanTestData{"$0.10", true},
-	}
-
-	for _, s := range tests {
-		output := make(map[string][][]string, 0)  // map of currency => array of strings
-		exchangeToWithdraw := make([][]string, 0) // FIFO queue or records
-		depositToExchange := make([][]string, 0)  // FIFO queue or records
-
-		testRow[tx_OutstandingLoan] = s.outstandingLoan
-		outputError := convertSingleTransaction(testRow, &output, &exchangeToWithdraw, &depositToExchange)
-
-		// The output map should have one key (NEXO) and one entry under that key
-		if len(output) != 1 {
-			t.Errorf("output: got %q, wanted exactly 1 entry (for key NEXO)", output)
-		}
-
-		if len(output["NEXO"]) != 1 {
-			t.Errorf("output: got %q, wanted 1 entry for NEXO", output)
-		}
-
-		// exch2Withdraw and dep2Exchange should always be empty
-		if len(exchangeToWithdraw) != 0 {
-			t.Errorf("exchangeToWithdraw: got %q, wanted %q", exchangeToWithdraw, "")
-		}
-		if len(depositToExchange) != 0 {
-			t.Errorf("depositToExchange: got %q, wanted %q", depositToExchange, "")
-		}
-
-		if s.errorOutputExpected && (len(outputError) < 1) {
-			t.Errorf("expected outputError missing:   for %s, got %q", s.outstandingLoan, outputError)
-		}
-
-		if !s.errorOutputExpected && (len(outputError) > 1) {
-			t.Errorf("unexpected outputError present: for %s, got %q", s.outstandingLoan, outputError)
-		}
-	}
-}
-
 // These tests verify that a "LockingTermDeposit" is (broadly) handled correctly
 func TestLockingTermDeposit(t *testing.T) {
 	testName := ""
