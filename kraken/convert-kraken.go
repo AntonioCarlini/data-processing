@@ -222,10 +222,10 @@ func convertTransactions(transactions [][]string) [][]string {
 					fmt.Printf("Saw 'spend' with missing fields in row %d\n", entry.row)
 					valid = false
 				}
-				// Handle a non-GBP spend; for now only FLOW is handled
+				// Handle a non-GBP spend; for now only FLOW, BTC, ETHW and DOT are handled
 				// TODO: Note that entry.asset may well be XXBT instead of BTC; leave that for now
 				note := fmt.Sprintf("SELL %s %s to buy %s %s", strings.TrimLeft(spend.amount, "-"), spend.asset, entry.amount, entry.asset)
-				if spend.asset == "FLOW" {
+				if spend.asset == "FLOW" || spend.asset == "DOT" || spend.asset == "ETHW" || spend.asset == "BTC" {
 					// TODO here sell FLOW amount will be -ve to show a spend; there will be a matching refid to show the currency purchased
 					// The spend in fiat currency is not known, so both the SELL and BUY will have to be calculated manually
 					// As a starting point, find the value of the purchased currentcy and use that for both.
@@ -240,15 +240,16 @@ func convertTransactions(transactions [][]string) [][]string {
 					totalSpendUSD = fmt.Sprintf("%f", tokenValueFloat32*float32(amount))
 					ukSpendTime := convertKrakenTimeToUKTime(spend.time)
 					if valid {
-						data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", totalSpendUSD, "", "", "", "", "", "", "SELL", "O", "", "", "", "", "T", "U", "V", "W", note}
+						data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", totalSpendUSD, "", "", "", "", "", "", "SELL", "", "", "", "", "", "", "", "", "", note}
 						output[spend.asset] = append(output[spend.asset], data)
 					} else {
 						data := []string{"", "Kraken", spend.time, ukSpendTime, spend.amount, "", totalSpendUSD, "", "", "", "", "", "", "SELL ** BAD DATA**"}
 						output[spend.asset] = append(output[spend.asset], data)
 
 					}
-				} else if spend.asset != "ZGBP" {
-					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d\n", spend.asset, spend.row)
+				} else if spend.asset != "ZGBP" && entry.asset != "USD" {
+					// TODO: consider both purchase of crypto using GBP and sale of crypto receiving GBP
+					fmt.Printf("Saw non GBP (currency %s) 'spend' in row %d and currency %s 'receive' in row %d\n", spend.asset, spend.row, entry.asset, entry.row)
 					valid = false
 				}
 				if valid {
@@ -396,6 +397,8 @@ func convertTransactions(transactions [][]string) [][]string {
 					data := []string{"**BAD DATA**", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "STAKING **BAD DATA**"}
 					output[stakedCurrency] = append(output[stakedCurrency], data)
 				}
+			} else if entry.subtype == "deallocation" {
+				// Deallocation doesn't seem to record anything meaningful, so ignore it
 			} else {
 				log.Fatalf("row %d: unhandled earn subtype %s\n", entry.row, entry.subtype)
 			}
@@ -428,15 +431,15 @@ func convertTransactions(transactions [][]string) [][]string {
 			// TODO-VERIFY-OR-REMOVE }
 
 		case "deposit":
-			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
-			// Do not remove the log.fatal() without verifying transaction handling and correcting if necessary.
-			log.Fatalf("row %d: unhandled transaction type %s", entry.row, entry.format)
+			// In early 2025 "deposit" is seen when a crypto currency is transferred to the exchange.
+			// So sending ETH from a wallet to Kraken would result in a "deposit" record.
+			// That should result in either a TRANSFER-IN or a MOVE-IN depending on the identity of the sender.
+			// The code assumes a TRANSFER-IN: if it is a MOVE-IN the manual adjustment will be needed
 
 			// TBD: ensure that this code checks everything that is documented
 			// If fiat currency, then it can be ignored (only "ZGBP" or "ZEUR" or "EUR.HOLD" will be seen here).
 			// If the currency ends in ".S" then this is the staking version of the currency, so save it to later match against a "transfer".
 			// Otherwise this is a TRANSFER-IN of that currency.
-			valid := rowValuesAcceptable
 			if isFiatCurrency(entry.asset) {
 				// This is a fiat currency deposit and so does not need to be processed further
 				// TODO: check fiat deposits more thoroughly
@@ -451,33 +454,8 @@ func convertTransactions(transactions [][]string) [][]string {
 				pendingStakingDeposits[entry.refid] = entry
 			} else {
 				// This is a deposit of a token into the Kraken wallet.
-				// Kraken lists these twice: firstly with a blank txid and a blank balance, and a second time with identical details but non-blank txid and balance. The same refid is used.
-				// Store the first entry in pendingTokenDeposist and check that it is there when the second entry is seen. Only second entry triggers an output.
-				// If only one but not both of txid and balance is blank, this is an unexpected error.
-				if (entry.txid == "" && entry.balance != "") || (entry.txid != "" && entry.balance == "") {
-					valid = false
-				}
-				if valid {
-					if entry.txid == "" && entry.balance == "" {
-						// This is the first of two expected deposits relating to a token. Store it for later processing.
-						pendingTokenDeposits[entry.refid] = entry
-					} else {
-						if prev, found := pendingTokenDeposits[entry.refid]; !found {
-							fmt.Printf("Saw deposit of token in row %d with without preparatory deposit\n", entry.row)
-						} else {
-							if (entry.asset != prev.asset) || (entry.amount != prev.amount) || (entry.fee != prev.fee) {
-								fmt.Printf("Saw matching deposit of token from row %d with values that do not match row %d)\n", prev.row, entry.row)
-							} else {
-								data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN"}
-								output[entry.asset] = append(output[entry.asset], data)
-							}
-
-						}
-					}
-				} else {
-					data := []string{"**BAD DATA", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN **BAD DATA"}
-					output[entry.asset] = append(output[entry.asset], data)
-				}
+				data := []string{"", "Kraken", entry.time, ukTime, entry.amount, "", "", "", "", "", "", "", "", "TRANSFER-IN"}
+				output[entry.asset] = append(output[entry.asset], data)
 			}
 		case "withdrawal":
 			// Since at least late 2024 this transaction type may have changed and so may no longer be handled correctly.
@@ -825,6 +803,10 @@ func loadPriceDataForCoin(c string, priceFile string) {
 }
 
 func LookupHistoricalTokenValue(requestedToken string, dateTime string) (float32, error) {
+	// TODO This function might be called with USD ... suppress the error in that case
+	if strings.ToLower(requestedToken) == "usd" {
+		return -1.0, nil
+	}
 	// Verify the date is valid and turn into the format coingecko wants (DD-MM-YY HH:MM:SS)
 	date, err := time.Parse("2006-01-02 15:04:05", dateTime)
 	if err != nil {
