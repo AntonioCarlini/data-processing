@@ -2,15 +2,19 @@ package main
 
 // This program takes a CSV from nexo.io and adjusts it into a format suitable for my records.
 // Where applicable it rearranges each row into a format that matches my exchange-independent records.
-
+//
+// Usage:
+//  go run nexo/convert-nexo.go input-csv-downloaded-from-nexo output-csv-file
+//
 // TODO
 // The usage should be explained here
 // Row processing should be enhanced to check all rows, even those that produce no output.
-
+//
 // Notes:
 // Timestamps are in CET. These are NOT YET converted to UK local time.
-
-// Note that an older format was used until some time between 2022-03-16 and 2022-04-06.
+//
+// An older input format was used by Nexo until some time between 2022-04-06 and 2025-03-01.
+// An even older input format was used by Nexo until some time between 2022-03-16 and 2022-04-06.
 //
 // Current CSV format:
 //
@@ -21,9 +25,10 @@ package main
 // Output Currency:
 // Output Amount:
 // USD Equivalent: USD ($) amount (presumably at the time)
+// Fee: first seen in MAR-2025, currently always "-"
+// Fee Currency: first seen in MAR-2025, currently always "-"
 // Details: always starts with "approved/"
-// Outstanding Loan: always "$0.00" [Removed sometime between 2022-APR and 2023-APR; no longer supported]
-// Date / Time: YYYY-MM-DD HH:MM:SS
+// *Date / Time: YYYY-MM-DD HH:MM:SS
 //
 // Transaction Type:
 //     Interest: Represents a staking reward
@@ -104,7 +109,7 @@ func main() {
 	}
 
 	// The first element must match this exactly otherwise the format may have changed:
-	expectedFirstRow := []string{"Transaction", "Type", "Input Currency", "Input Amount", "Output Currency", "Output Amount", "USD Equivalent", "Details", "Date / Time (UTC)"}
+	expectedFirstRow := []string{"Transaction", "Type", "Input Currency", "Input Amount", "Output Currency", "Output Amount", "USD Equivalent", "Fee", "Fee Currency", "Details", "Date / Time (UTC)"}
 	firstRow := transactions[0]
 	if !testSlicesEqual(firstRow, expectedFirstRow) {
 		fmt.Printf("Expected first row format: %s\n", expectedFirstRow)
@@ -170,8 +175,10 @@ const ( // iota is reset to 0
 	tx_OutputCurrency = 4 //
 	tx_OutputAmount   = 5 //
 	tx_UsdEquivalent  = 6 //
-	tx_Details        = 7 //
-	tx_DateTime       = 8 //
+	tx_Fee            = 7
+	tx_FeeCurrency    = 8
+	tx_Details        = 9  //  Changed
+	tx_DateTime       = 10 //  Changed
 )
 
 func convertTransactions(transactions [][]string) [][]string {
@@ -250,6 +257,15 @@ func convertTransactions(transactions [][]string) [][]string {
 func convertSingleTransaction(row []string, output *map[string][][]string, exchangeToWithdraw *[][]string, depositToExchange *[][]string) string {
 
 	errorOutput := ""
+
+	// Noticed new fields in 2025, "Fee" and "FeeCurrency". These are currently always '-'. Check that in case it becomes relevant in the future.
+	if row[tx_Fee] != "-" {
+		errorOutput += fmt.Sprintf("TX %s: %s invalid 'Fee', expected '-', found: %s\n", row[tx_ID], row[tx_Type], row[tx_Fee])
+	}
+
+	if row[tx_FeeCurrency] != "-" {
+		errorOutput += fmt.Sprintf("TX %s: %s invalid 'FeeCurrency', expected '-', found: %s\n", row[tx_ID], row[tx_Type], row[tx_Fee])
+	}
 
 	// Handle each transaction Type separately
 	switch row[tx_Type] { // row[1] is the "Type"
